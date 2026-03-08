@@ -18,6 +18,7 @@ import org.bukkit.event.block.BlockPistonExtendEvent
 import org.bukkit.event.block.BlockPistonRetractEvent
 import org.bukkit.event.block.BlockPlaceEvent
 import org.bukkit.event.entity.EntityExplodeEvent
+import org.bukkit.event.inventory.InventoryMoveItemEvent
 import org.bukkit.event.player.PlayerInteractEvent
 
 private val CONTAINER_MATERIALS = setOf(
@@ -132,6 +133,45 @@ class ProtectionListener(
         if (!pm.canAccess(loc, uuid)) {
             event.isCancelled = true
             event.player.sendActionBar(deny)
+        }
+    }
+
+    // ── Hopper / Hopper Minecart: block item transfer from/to protected containers ──
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onInventoryMoveItem(event: InventoryMoveItemEvent) {
+        // Check pulling FROM a protected container
+        val sourceLoc = (event.source.holder as? org.bukkit.block.Container)?.location
+        if (sourceLoc != null && pm.isProtected(sourceLoc)) {
+            val sourceOwner = pm.getOwner(sourceLoc)!!
+            val destHolder = event.destination.holder
+            if (destHolder is org.bukkit.block.Container) {
+                // Block hopper: allow only if protected by same owner/team
+                val destOwner = pm.getOwner(destHolder.location)
+                if (destOwner == null || !pm.canAccess(sourceLoc, destOwner)) {
+                    event.isCancelled = true
+                    return
+                }
+            } else {
+                // Entity (hopper minecart) — always block
+                event.isCancelled = true
+                return
+            }
+        }
+
+        // Check pushing INTO a protected container
+        val destLoc = (event.destination.holder as? org.bukkit.block.Container)?.location
+        if (destLoc != null && pm.isProtected(destLoc)) {
+            val destOwner = pm.getOwner(destLoc)!!
+            val sourceHolder = event.source.holder
+            if (sourceHolder is org.bukkit.block.Container) {
+                val srcOwner = pm.getOwner(sourceHolder.location)
+                if (srcOwner == null || !pm.canAccess(destLoc, srcOwner)) {
+                    event.isCancelled = true
+                }
+            } else {
+                event.isCancelled = true
+            }
         }
     }
 

@@ -13,7 +13,7 @@ class DataManager(private val dataFolder: File) {
 
     private class CachedPlayer(
         var info: PlayerInfo,
-        var skills: SkillData,
+        var slotSkills: MutableMap<Int, SkillData> = mutableMapOf(),
         var home: HomeLocation? = null,
         var lastDailyReward: String? = null,
         var dirty: Boolean = false
@@ -29,14 +29,69 @@ class DataManager(private val dataFolder: File) {
         val file = File(playerDataDir, "$uuid.yml")
         if (!file.exists()) {
             val info = PlayerInfo(linked = false, minecraftName = name)
-            cache[uuid] = CachedPlayer(info = info, skills = SkillData())
+            cache[uuid] = CachedPlayer(info = info)
             return info
         }
 
         val cfg = YamlConfiguration.loadConfiguration(file)
-        val skillLevels = mutableMapOf<String, Int>()
-        cfg.getConfigurationSection("skills")?.getKeys(false)?.forEach { key ->
-            skillLevels[key] = cfg.getInt("skills.$key", 0)
+
+        // Detect old format (has "job" key but no "job-slots")
+        val slotSkills = mutableMapOf<Int, SkillData>()
+        val jobSlots: List<JobSlot>
+        val activeSlot: Int
+        val maxSlots: Int
+        val lastJobSwitch: String?
+
+        if (cfg.contains("job") && !cfg.contains("job-slots")) {
+            // Migrate old format
+            val oldJob = cfg.getString("job")
+            val oldLevel = cfg.getInt("level", 1)
+            val oldXp = cfg.getInt("xp", 0)
+            jobSlots = if (oldJob != null) listOf(JobSlot(oldJob, oldLevel, oldXp)) else emptyList()
+            activeSlot = 0
+            maxSlots = 1
+            lastJobSwitch = null
+
+            // Migrate old skills to slot 0
+            val oldSkillLevels = mutableMapOf<String, Int>()
+            cfg.getConfigurationSection("skills")?.getKeys(false)?.forEach { key ->
+                oldSkillLevels[key] = cfg.getInt("skills.$key", 0)
+            }
+            slotSkills[0] = SkillData(
+                skillPoints = cfg.getInt("skill-points", 0),
+                levels = oldSkillLevels
+            )
+        } else {
+            // New format
+            val slots = mutableListOf<JobSlot>()
+            val slotsSection = cfg.getConfigurationSection("job-slots")
+            if (slotsSection != null) {
+                val indices = slotsSection.getKeys(false).mapNotNull { it.toIntOrNull() }.sorted()
+                for (idx in indices) {
+                    val job = cfg.getString("job-slots.$idx.job") ?: ""
+                    val level = cfg.getInt("job-slots.$idx.level", 1)
+                    val xp = cfg.getInt("job-slots.$idx.xp", 0)
+                    slots.add(JobSlot(job, level, xp))
+                }
+            }
+            jobSlots = slots
+            activeSlot = cfg.getInt("active-slot", 0)
+            maxSlots = cfg.getInt("max-slots", 1)
+            lastJobSwitch = cfg.getString("last-job-switch")
+
+            // Load per-slot skills
+            val skillsSection = cfg.getConfigurationSection("skills")
+            if (skillsSection != null) {
+                val slotIndices = skillsSection.getKeys(false).mapNotNull { it.toIntOrNull() }
+                for (slotIdx in slotIndices) {
+                    val levels = mutableMapOf<String, Int>()
+                    cfg.getConfigurationSection("skills.$slotIdx")?.getKeys(false)?.forEach { key ->
+                        levels[key] = cfg.getInt("skills.$slotIdx.$key", 0)
+                    }
+                    val sp = cfg.getInt("skill-points.$slotIdx", 0)
+                    slotSkills[slotIdx] = SkillData(skillPoints = sp, levels = levels)
+                }
+            }
         }
 
         val info = PlayerInfo(
@@ -44,17 +99,13 @@ class DataManager(private val dataFolder: File) {
             discordUserId = cfg.getString("discord-user-id"),
             minecraftName = cfg.getString("minecraft-name", name),
             balance = cfg.getInt("balance", 0),
-            job = cfg.getString("job"),
-            level = cfg.getInt("level", 1),
-            xp = cfg.getInt("xp", 0),
+            jobSlots = jobSlots,
+            activeSlot = activeSlot,
+            maxSlots = maxSlots,
+            lastJobSwitch = lastJobSwitch,
             title = cfg.getString("title"),
             titleColor = cfg.getString("title-color"),
             titleIconUrl = cfg.getString("title-icon-url")
-        )
-
-        val skills = SkillData(
-            skillPoints = cfg.getInt("skill-points", 0),
-            levels = skillLevels
         )
 
         val home = if (cfg.getBoolean("home.set", false)) {
@@ -70,7 +121,7 @@ class DataManager(private val dataFolder: File) {
 
         cache[uuid] = CachedPlayer(
             info = info,
-            skills = skills,
+            slotSkills = slotSkills,
             home = home,
             lastDailyReward = cfg.getString("last-daily-reward")
         )
@@ -78,7 +129,13 @@ class DataManager(private val dataFolder: File) {
     }
 
     fun getPlayer(uuid: UUID): PlayerInfo? = cache[uuid]?.info
-    fun getSkills(uuid: UUID): SkillData = cache[uuid]?.skills ?: SkillData()
+
+    fun getSkills(uuid: UUID): SkillData {
+        val cached = cache[uuid] ?: return SkillData()
+        val slot = cached.info.activeSlot
+        return cached.slotSkills[slot] ?: SkillData()
+    }
+
     fun isLinked(uuid: UUID): Boolean = cache[uuid]?.info?.linked ?: false
 
     // ── Link ──
@@ -117,20 +174,67 @@ class DataManager(private val dataFolder: File) {
         return true
     }
 
-    // ── Job ──
+    // ── Job Slots ──
 
-    fun setJob(uuid: UUID, job: String) {
+    /** Set the job on a specific slot index, resetting level/xp/skills for that slot */
+    fun setJobOnSlot(uuid: UUID, slotIndex: Int, job: String) {
         val cached = cache[uuid] ?: return
-        cached.info = cached.info.copy(job = job, level = 1, xp = 0)
-        cached.skills = SkillData(skillPoints = 0, levels = emptyMap())
+        val slots = cached.info.jobSlots.toMutableList()
+        while (slots.size <= slotIndex) slots.add(JobSlot(""))
+        slots[slotIndex] = JobSlot(job, 1, 0)
+        cached.info = cached.info.copy(jobSlots = slots)
+        cached.slotSkills[slotIndex] = SkillData(skillPoints = 0, levels = emptyMap())
         cached.dirty = true
         save(uuid)
     }
 
+    /** Legacy setJob — sets job on the currently active slot */
+    fun setJob(uuid: UUID, job: String) {
+        val cached = cache[uuid] ?: return
+        setJobOnSlot(uuid, cached.info.activeSlot, job)
+    }
+
+    /** Switch to a different active slot. Returns false if slot is invalid or unowned */
+    fun switchActiveSlot(uuid: UUID, slotIndex: Int): Boolean {
+        val cached = cache[uuid] ?: return false
+        if (slotIndex >= cached.info.maxSlots) return false
+        if (slotIndex >= cached.info.jobSlots.size) return false
+        cached.info = cached.info.copy(
+            activeSlot = slotIndex,
+            lastJobSwitch = LocalDate.now().toString()
+        )
+        cached.dirty = true
+        save(uuid)
+        return true
+    }
+
+    /** Purchase an additional slot for 5000냥. Returns false if already at max or insufficient funds */
+    fun buySlot(uuid: UUID): Boolean {
+        val cached = cache[uuid] ?: return false
+        if (cached.info.maxSlots >= 3) return false
+        val cost = 5000
+        if (!hasBalance(uuid, cost)) return false
+        spendBalance(uuid, cost)
+        cached.info = cached.info.copy(maxSlots = cached.info.maxSlots + 1)
+        cached.dirty = true
+        save(uuid)
+        return true
+    }
+
+    /** Returns true if the player can switch slots today (1-day cooldown) */
+    fun canSwitchJob(uuid: UUID): Boolean {
+        val cached = cache[uuid] ?: return false
+        val lastSwitch = cached.info.lastJobSwitch ?: return true
+        return lastSwitch != LocalDate.now().toString()
+    }
+
     fun grantXp(uuid: UUID, amount: Int): XpResult? {
         val cached = cache[uuid] ?: return null
-        var level = cached.info.level
-        var xp = cached.info.xp + amount
+        val slotIdx = cached.info.activeSlot
+        val slot = cached.info.jobSlots.getOrNull(slotIdx) ?: return null
+
+        var level = slot.level
+        var xp = slot.xp + amount
         var leveledUp = false
         var newSkillPoints: Int? = null
 
@@ -143,12 +247,15 @@ class DataManager(private val dataFolder: File) {
         }
 
         if (leveledUp) {
-            val sp = cached.skills.skillPoints + 1
-            cached.skills = cached.skills.copy(skillPoints = sp)
+            val skills = cached.slotSkills[slotIdx] ?: SkillData()
+            val sp = skills.skillPoints + 1
+            cached.slotSkills[slotIdx] = skills.copy(skillPoints = sp)
             newSkillPoints = sp
         }
 
-        cached.info = cached.info.copy(level = level, xp = xp)
+        val slots = cached.info.jobSlots.toMutableList()
+        slots[slotIdx] = slot.copy(level = level, xp = xp)
+        cached.info = cached.info.copy(jobSlots = slots)
         cached.dirty = true
 
         return XpResult(
@@ -160,28 +267,50 @@ class DataManager(private val dataFolder: File) {
         )
     }
 
+    fun setLevel(uuid: UUID, targetLevel: Int): Int {
+        val cached = cache[uuid] ?: return 0
+        val slotIdx = cached.info.activeSlot
+        val slot = cached.info.jobSlots.getOrNull(slotIdx) ?: return 0
+        val oldLevel = slot.level
+        val levelsGained = (targetLevel - oldLevel).coerceAtLeast(0)
+        val slots = cached.info.jobSlots.toMutableList()
+        slots[slotIdx] = slot.copy(level = targetLevel, xp = 0)
+        cached.info = cached.info.copy(jobSlots = slots)
+        if (levelsGained > 0) {
+            val skills = cached.slotSkills[slotIdx] ?: SkillData()
+            cached.slotSkills[slotIdx] = skills.copy(skillPoints = skills.skillPoints + levelsGained)
+        }
+        cached.dirty = true
+        save(uuid)
+        return levelsGained
+    }
+
     // ── Skills ──
 
     fun upgradeSkill(uuid: UUID, skillKey: String): Triple<Boolean, Int, Int>? {
         val cached = cache[uuid] ?: return null
         val def = SkillRegistry.get(skillKey) ?: return null
-        val currentLv = cached.skills.getLevel(skillKey)
+        val slotIdx = cached.info.activeSlot
+        val skills = cached.slotSkills[slotIdx] ?: SkillData()
+        val currentLv = skills.getLevel(skillKey)
 
         if (currentLv >= def.maxLevel) return null
-        if (cached.skills.skillPoints <= 0) return null
+        if (skills.skillPoints <= 0) return null
 
         val levelReq = def.levelReqs.getOrNull(currentLv) ?: return null
         if (cached.info.level < levelReq) return null
 
-        cached.skills = cached.skills.withUpgrade(skillKey)
+        val updated = skills.withUpgrade(skillKey)
+        cached.slotSkills[slotIdx] = updated
         cached.dirty = true
 
-        return Triple(true, currentLv + 1, cached.skills.skillPoints)
+        return Triple(true, currentLv + 1, updated.skillPoints)
     }
 
     fun updateSkills(uuid: UUID, skills: SkillData) {
         val cached = cache[uuid] ?: return
-        cached.skills = skills
+        val slotIdx = cached.info.activeSlot
+        cached.slotSkills[slotIdx] = skills
         cached.dirty = true
     }
 
@@ -243,17 +372,27 @@ class DataManager(private val dataFolder: File) {
         cfg.set("discord-user-id", cached.info.discordUserId)
         cfg.set("minecraft-name", cached.info.minecraftName)
         cfg.set("balance", cached.info.balance)
-        cfg.set("job", cached.info.job)
-        cfg.set("level", cached.info.level)
-        cfg.set("xp", cached.info.xp)
-        cfg.set("skill-points", cached.skills.skillPoints)
+        cfg.set("active-slot", cached.info.activeSlot)
+        cfg.set("max-slots", cached.info.maxSlots)
+        cfg.set("last-job-switch", cached.info.lastJobSwitch)
         cfg.set("title", cached.info.title)
         cfg.set("title-color", cached.info.titleColor)
         cfg.set("title-icon-url", cached.info.titleIconUrl)
         cfg.set("last-daily-reward", cached.lastDailyReward)
 
-        for ((key, lv) in cached.skills.levels) {
-            cfg.set("skills.$key", lv)
+        // Job slots
+        for ((idx, slot) in cached.info.jobSlots.withIndex()) {
+            cfg.set("job-slots.$idx.job", slot.job)
+            cfg.set("job-slots.$idx.level", slot.level)
+            cfg.set("job-slots.$idx.xp", slot.xp)
+        }
+
+        // Skills per slot
+        for ((slotIdx, skills) in cached.slotSkills) {
+            cfg.set("skill-points.$slotIdx", skills.skillPoints)
+            for ((key, lv) in skills.levels) {
+                cfg.set("skills.$slotIdx.$key", lv)
+            }
         }
 
         if (cached.home != null) {

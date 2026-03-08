@@ -68,22 +68,30 @@ class ActionBarManager(private val plugin: NyaruPlugin, private val pm: Protecti
         }
     }
 
-    /** Update balance locally without redundant reload */
+    /** Update balance locally and push to sidebar immediately */
     fun updateBalance(uuid: UUID, newBalance: Int) {
         val info = cache[uuid] ?: return
-        cache[uuid] = info.copy(balance = newBalance)
+        val updated = info.copy(balance = newBalance)
+        cache[uuid] = updated
+        pushSidebar(uuid, updated)
     }
 
-    /** Update XP/level locally */
+    /** Update XP/level — re-reads from dataManager since slot data is there */
     fun updateXp(uuid: UUID, level: Int, xp: Int) {
-        val info = cache[uuid] ?: return
-        cache[uuid] = info.copy(level = level, xp = xp)
+        refresh(uuid)
     }
 
-    /** Update job locally */
+    /** Update job — re-reads from dataManager since slot data is there */
     fun updateJob(uuid: UUID, job: String) {
-        val info = cache[uuid] ?: return
-        cache[uuid] = info.copy(job = job, level = 1, xp = 0)
+        refresh(uuid)
+    }
+
+    private fun pushSidebar(uuid: UUID, info: PlayerInfo) {
+        val player = Bukkit.getPlayer(uuid) ?: return
+        Bukkit.getScheduler().runTask(plugin, Runnable {
+            chatTabListener?.updateTabName(player, info)
+            plugin.sidebarManager.update(player, info)
+        })
     }
 
     private fun buildActionBarText(info: PlayerInfo, uuid: UUID): net.kyori.adventure.text.Component {

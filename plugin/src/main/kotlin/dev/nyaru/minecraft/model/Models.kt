@@ -1,17 +1,28 @@
 package dev.nyaru.minecraft.model
 
+data class JobSlot(
+    val job: String,
+    val level: Int = 1,
+    val xp: Int = 0
+)
+
 data class PlayerInfo(
     val linked: Boolean,
     val discordUserId: String? = null,
     val minecraftName: String? = null,
     val balance: Int = 0,
-    val job: String? = null,
-    val level: Int = 1,
-    val xp: Int = 0,
+    val jobSlots: List<JobSlot> = emptyList(),
+    val activeSlot: Int = 0,
+    val maxSlots: Int = 1,
+    val lastJobSwitch: String? = null,
     val title: String? = null,
     val titleColor: String? = null,
     val titleIconUrl: String? = null
-)
+) {
+    val job: String? get() = jobSlots.getOrNull(activeSlot)?.job
+    val level: Int get() = jobSlots.getOrNull(activeSlot)?.level ?: 1
+    val xp: Int get() = jobSlots.getOrNull(activeSlot)?.xp ?: 0
+}
 
 data class SkillData(
     val skillPoints: Int = 0,

@@ -27,7 +27,8 @@ class AdminCommand(
             "지급" -> handleGive(sender, args)
             "차감" -> handleDeduct(sender, args)
             "설정" -> handleSet(sender, args)
-            else -> sender.sendMessage("§f/나루관리 <npc|상점|지급|차감|설정>")
+            "레벨" -> handleLevel(sender, args)
+            else -> sender.sendMessage("§f/나루관리 <npc|상점|지급|차감|설정|레벨>")
         }
         return true
     }
@@ -159,14 +160,42 @@ class AdminCommand(
         target.sendMessage("§e관리자에 의해 냥이 §f${amount}냥§e으로 설정되었습니다.")
     }
 
+    private fun handleLevel(sender: CommandSender, args: Array<out String>) {
+        val targetName = args.getOrNull(1)
+        val level = args.getOrNull(2)?.toIntOrNull()
+        if (targetName == null || level == null || level < 1) {
+            sender.sendMessage("§c사용법: /나루관리 레벨 <플레이어> <레벨>")
+            return
+        }
+        val target = Bukkit.getPlayerExact(targetName)
+        if (target == null) {
+            sender.sendMessage("§c플레이어 §f${targetName}§c을(를) 찾을 수 없습니다.")
+            return
+        }
+        val info = plugin.dataManager.getPlayer(target.uniqueId)
+        if (info?.job == null) {
+            sender.sendMessage("§c${target.name}은(는) 직업이 없습니다.")
+            return
+        }
+        val oldLevel = info.level
+        val skillPointsGained = plugin.dataManager.setLevel(target.uniqueId, level)
+        plugin.actionBarManager.refresh(target.uniqueId)
+        plugin.skillManager.refresh(target.uniqueId)
+        sender.sendMessage("§a${target.name}의 레벨을 §e${oldLevel} → ${level}§a로 설정했습니다! §7(스킬포인트 +${skillPointsGained})")
+        target.sendMessage("§a§l✓ 레벨이 §e${level}§a로 설정되었습니다! §7(스킬포인트 +${skillPointsGained})")
+        if (level > oldLevel) {
+            target.playSound(target.location, org.bukkit.Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+        }
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (!sender.hasPermission("nyaru.admin")) return emptyList()
         return when (args.size) {
-            1 -> listOf("npc", "상점", "지급", "차감", "설정").filter { it.startsWith(args[0]) }
+            1 -> listOf("npc", "상점", "지급", "차감", "설정", "레벨").filter { it.startsWith(args[0]) }
             2 -> when (args[0].lowercase()) {
                 "npc" -> listOf("상점", "직업", "강화").filter { it.startsWith(args[1]) }
                 "상점" -> listOf("추가", "제거", "목록").filter { it.startsWith(args[1]) }
-                "지급", "차감", "설정" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1]) }
+                "지급", "차감", "설정", "레벨" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1]) }
                 else -> emptyList()
             }
             3 -> when {

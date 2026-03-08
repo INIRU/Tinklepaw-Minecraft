@@ -2,11 +2,13 @@ package dev.nyaru.minecraft.listeners
 
 import dev.nyaru.minecraft.NyaruPlugin
 import dev.nyaru.minecraft.skills.SkillManager
+import dev.nyaru.minecraft.util.triggerLevelUp
 import org.bukkit.Material
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockPlaceEvent
+import org.bukkit.persistence.PersistentDataType
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -23,6 +25,18 @@ class BlockPlaceListener(private val plugin: NyaruPlugin, private val skillManag
 
     private val widePlantActive = ConcurrentHashMap.newKeySet<UUID>()
 
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onSellItemBlock(event: BlockPlaceEvent) {
+        val meta = event.itemInHand.itemMeta ?: return
+        if (meta.persistentDataContainer.get(CROP_USAGE_KEY, PersistentDataType.STRING) == "sell") {
+            event.isCancelled = true
+            event.player.sendActionBar(
+                net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection()
+                    .deserialize("§c이 아이템은 판매 전용입니다.")
+            )
+        }
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onBlockPlace(event: BlockPlaceEvent) {
         val placedType = event.blockPlaced.type
@@ -31,6 +45,18 @@ class BlockPlaceListener(private val plugin: NyaruPlugin, private val skillManag
 
         val player = event.player
         val uuid = player.uniqueId
+
+        // Grant 1 XP for planting crops (farmer only)
+        if (plugin.dataManager.getPlayer(uuid)?.job == "farmer") {
+            val result = plugin.dataManager.grantXp(uuid, 1)
+            if (result != null) {
+                plugin.actionBarManager.updateXp(uuid, result.level, result.xp)
+                if (result.leveledUp) {
+                    triggerLevelUp(plugin, player, result.level, result.newSkillPoints)
+                }
+            }
+        }
+
         val skills = skillManager.getSkills(uuid)
         if (skills.getLevel("wide_plant") < 1) return
         if (widePlantActive.contains(uuid)) return
@@ -58,9 +84,12 @@ class BlockPlaceListener(private val plugin: NyaruPlugin, private val skillManag
                         if (targetBlock.type != Material.AIR) continue
                         if (belowBlock.type != Material.FARMLAND) continue
 
-                        // Check if player has seeds in inventory
+                        // Check if player has plant-tagged seeds in inventory
                         val inv = player.inventory
-                        val seedSlot = inv.first(seedMaterial)
+                        val seedSlot = inv.contents.indexOfFirst { stack ->
+                            stack != null && stack.type == seedMaterial &&
+                            stack.itemMeta?.persistentDataContainer?.get(CROP_USAGE_KEY, PersistentDataType.STRING) == "plant"
+                        }
                         if (seedSlot == -1) break // No more seeds
 
                         // Consume one seed

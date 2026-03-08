@@ -124,7 +124,23 @@ class ShopManager(private val dataFolder: File) {
             ShopItem("blaze_rod", "BLAZE_ROD", "블레이즈 막대", 0, 25, "전리품"),
             ShopItem("ghast_tear", "GHAST_TEAR", "가스트 눈물", 0, 40, "전리품"),
             ShopItem("phantom_membrane", "PHANTOM_MEMBRANE", "팬텀 막", 0, 15, "전리품"),
-            ShopItem("gunpowder", "GUNPOWDER", "화약", 0, 5, "전리품")
+            ShopItem("gunpowder", "GUNPOWDER", "화약", 0, 5, "전리품"),
+            // 건축 (Building)
+            ShopItem("stone", "STONE", "돌", 5, 1, "건축"),
+            ShopItem("cobblestone", "COBBLESTONE", "조약돌", 3, 1, "건축"),
+            ShopItem("stone_bricks", "STONE_BRICKS", "석벽돌", 8, 2, "건축"),
+            ShopItem("bricks", "BRICKS", "벽돌", 10, 3, "건축"),
+            ShopItem("glass", "GLASS", "유리", 8, 2, "건축"),
+            ShopItem("white_concrete", "WHITE_CONCRETE", "흰색 콘크리트", 6, 1, "건축"),
+            ShopItem("quartz_block", "QUARTZ_BLOCK", "석영 블록", 15, 4, "건축"),
+            ShopItem("smooth_stone", "SMOOTH_STONE", "매끈한 돌", 7, 2, "건축"),
+            ShopItem("oak_planks", "OAK_PLANKS", "참나무 판자", 4, 1, "건축"),
+            ShopItem("spruce_planks", "SPRUCE_PLANKS", "가문비나무 판자", 4, 1, "건축"),
+            ShopItem("dark_oak_planks", "DARK_OAK_PLANKS", "짙은 참나무 판자", 5, 1, "건축"),
+            ShopItem("sandstone", "SANDSTONE", "사암", 6, 1, "건축"),
+            ShopItem("deepslate_bricks", "DEEPSLATE_BRICKS", "딥슬레이트 벽돌", 12, 3, "건축"),
+            ShopItem("terracotta", "TERRACOTTA", "테라코타", 8, 2, "건축"),
+            ShopItem("tinted_glass", "TINTED_GLASS", "색유리", 12, 3, "건축")
         ))
         save()
     }

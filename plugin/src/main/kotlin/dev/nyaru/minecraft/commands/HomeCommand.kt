@@ -79,6 +79,7 @@ class HomeCommand(private val plugin: NyaruPlugin) : CommandExecutor, TabComplet
                                 cancel()
                                 return
                             }
+                            plugin.actionBarManager.refresh(uuid)
                             val world = org.bukkit.Bukkit.getWorld(home.world)
                             if (world == null) {
                                 player.sendMessage("§c집 월드를 찾을 수 없습니다.")

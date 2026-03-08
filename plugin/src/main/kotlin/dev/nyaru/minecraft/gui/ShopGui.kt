@@ -34,7 +34,8 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
             "씨앗" to Material.WHEAT_SEEDS,
             "목재" to Material.OAK_LOG,
             "물고기" to Material.COD,
-            "전리품" to Material.ENDER_PEARL
+            "전리품" to Material.ENDER_PEARL,
+            "건축" to Material.BRICKS
         )
 
         val CATEGORY_SLOTS = listOf(20, 21, 22, 23, 24)
@@ -184,6 +185,19 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         back.editMeta { meta -> meta.displayName(legacy.deserialize("§f← 뒤로")) }
         inventory.setItem(45, back)
 
+        // Sell All button slot 53
+        val sellAll = ItemStack(Material.GOLD_BLOCK)
+        sellAll.editMeta { meta ->
+            meta.displayName(legacy.deserialize("§6§l전량 판매"))
+            meta.lore(listOf(
+                legacy.deserialize("§7이 카테고리의 모든 아이템을"),
+                legacy.deserialize("§7한번에 판매합니다."),
+                Component.empty(),
+                legacy.deserialize("§a▶ 클릭하여 전량 판매")
+            ))
+        }
+        inventory.setItem(53, sellAll)
+
         activeInventories[inventory] = this
         player.openInventory(inventory)
         player.playSound(player.location, Sound.ITEM_BOOK_PAGE_TURN, 0.8f, 1.0f)
@@ -307,6 +321,11 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
             return
         }
 
+        if (slot == 53) {
+            executeSellAll()
+            return
+        }
+
         val idx = ITEM_SLOTS.indexOf(slot)
         if (idx < 0 || idx >= categoryItems.size) return
 
@@ -320,7 +339,14 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
                 return
             }
             val mat = runCatching { Material.valueOf(shopItem.material) }.getOrNull() ?: return
-            val count = player.inventory.all(mat).values.sumOf { it.amount }
+            val cropUsageKey = org.bukkit.NamespacedKey("nyaru", "crop_usage")
+            val count = (0 until player.inventory.size).sumOf { i ->
+                val stack = player.inventory.getItem(i)
+                if (stack != null && stack.type == mat && stack.amount > 0 &&
+                    stack.itemMeta?.persistentDataContainer?.get(cropUsageKey, PersistentDataType.STRING) != "plant") {
+                    stack.amount
+                } else 0
+            }
             if (count <= 0) {
                 player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
                 player.sendMessage("§c인벤토리에 §e${shopItem.displayName}§c이/가 없습니다.")
@@ -410,6 +436,7 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         }
 
         plugin.dataManager.spendBalance(player.uniqueId, totalCost)
+        plugin.actionBarManager.refresh(player.uniqueId)
         plugin.dataManager.save(player.uniqueId)
 
         // Give items (split into stacks of 64)
@@ -433,8 +460,12 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         }
 
         val inv = player.inventory
+        val cropUsageKey = org.bukkit.NamespacedKey("nyaru", "crop_usage")
         val matchingStacks = (0 until inv.size)
-            .mapNotNull { i -> inv.getItem(i)?.takeIf { it.type == mat && it.amount > 0 }?.let { i to it } }
+            .mapNotNull { i -> inv.getItem(i)?.takeIf { stack ->
+                stack.type == mat && stack.amount > 0 &&
+                stack.itemMeta?.persistentDataContainer?.get(cropUsageKey, PersistentDataType.STRING) != "plant"
+            }?.let { i to it } }
 
         val totalAvailable = matchingStacks.sumOf { (_, s) -> s.amount }
         if (totalAvailable < qty) {
@@ -503,6 +534,7 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         val totalEarnings = (finalUnitPrice * qty).toInt()
 
         plugin.dataManager.addBalance(player.uniqueId, totalEarnings)
+        plugin.actionBarManager.refresh(player.uniqueId)
         plugin.dataManager.save(player.uniqueId)
 
         val purityName = when (purity) {
@@ -521,6 +553,85 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         if (purityName != null) {
             player.sendMessage("§7순정도: ${purityName}")
         }
+        player.closeInventory()
+    }
+
+    private fun executeSellAll() {
+        val inv = player.inventory
+        var totalEarnings = 0
+        var totalItemsSold = 0
+        val cropUsageKey = org.bukkit.NamespacedKey("nyaru", "crop_usage")
+
+        for (shopItem in categoryItems) {
+            if (shopItem.sellPrice <= 0) continue
+            val mat = runCatching { Material.valueOf(shopItem.material) }.getOrNull() ?: continue
+
+            // Find all matching stacks, excluding plant-tagged items
+            val matchingStacks = (0 until inv.size).mapNotNull { i ->
+                inv.getItem(i)?.takeIf { stack ->
+                    stack.type == mat && stack.amount > 0 &&
+                    stack.itemMeta?.persistentDataContainer?.get(cropUsageKey, PersistentDataType.STRING) != "plant"
+                }?.let { i to it }
+            }
+
+            if (matchingStacks.isEmpty()) continue
+
+            val qty = matchingStacks.sumOf { (_, s) -> s.amount }
+
+            // Get representative stack for bonuses
+            val sortedStacks = matchingStacks.sortedByDescending { (_, s) ->
+                val pdc = s.itemMeta?.persistentDataContainer
+                when {
+                    pdc?.has(HARVEST_TIME_KEY, PersistentDataType.LONG) == true -> 2
+                    pdc?.has(PURITY_KEY, PersistentDataType.INTEGER) == true -> 1
+                    else -> 0
+                }
+            }
+            val representativeMeta = sortedStacks.firstOrNull()?.second?.itemMeta
+            val harvTime = representativeMeta?.persistentDataContainer?.get(HARVEST_TIME_KEY, PersistentDataType.LONG)
+            val purity = representativeMeta?.persistentDataContainer?.get(PURITY_KEY, PersistentDataType.INTEGER)
+
+            val freshnessPct: Double? = if (harvTime != null) {
+                val minutesOld = (System.currentTimeMillis() - harvTime) / 60000.0
+                when {
+                    minutesOld <= 10 -> 100.0
+                    minutesOld >= 30 -> 60.0
+                    else -> 100.0 - ((minutesOld - 10) / 20.0) * 40.0
+                }
+            } else null
+
+            // Remove items
+            for ((invSlot, _) in sortedStacks) {
+                inv.setItem(invSlot, null)
+            }
+
+            // Calculate price
+            val basePrice = shopItem.sellPrice.toDouble()
+            val purityMultiplier: Double = when (purity) {
+                4 -> 1.5; 3 -> 1.25; 2 -> 1.1; else -> 1.0
+            }
+            val purityBonus = basePrice * (if (purity != null) purityMultiplier else 1.0)
+            val finalUnitPrice: Double = if (freshnessPct != null) {
+                purityBonus * (0.6 + freshnessPct / 100.0 * 0.4)
+            } else purityBonus
+
+            val earnings = (finalUnitPrice * qty).toInt()
+            totalEarnings += earnings
+            totalItemsSold += qty
+        }
+
+        if (totalItemsSold == 0) {
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+            player.sendMessage("§c판매할 아이템이 없습니다.")
+            return
+        }
+
+        plugin.dataManager.addBalance(player.uniqueId, totalEarnings)
+        plugin.actionBarManager.refresh(player.uniqueId)
+        plugin.dataManager.save(player.uniqueId)
+
+        player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
+        player.sendMessage("§a전량 판매 완료! §f${totalItemsSold}개 §6+${totalEarnings}냥")
         player.closeInventory()
     }
 

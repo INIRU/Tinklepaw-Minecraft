@@ -15,6 +15,7 @@ import dev.nyaru.minecraft.commands.TeamCommand
 import dev.nyaru.minecraft.commands.UnlinkCommand
 import dev.nyaru.minecraft.data.DataManager
 import dev.nyaru.minecraft.data.ShopManager
+import dev.nyaru.minecraft.gui.EnhanceGui
 import dev.nyaru.minecraft.gui.HelpGui
 import dev.nyaru.minecraft.gui.JobSelectGui
 import dev.nyaru.minecraft.gui.ShopGui
@@ -68,6 +69,9 @@ class NyaruPlugin : JavaPlugin() {
     lateinit var blockLogger: BlockLogger
         private set
 
+    lateinit var skillManager: SkillManager
+        private set
+
     val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onEnable() {
@@ -99,7 +103,7 @@ class NyaruPlugin : JavaPlugin() {
         server.pluginManager.registerEvents(BlockLogListener(blockLogger), this)
         server.pluginManager.registerEvents(HelpGui.HelpGuiListener(), this)
 
-        val skillManager = SkillManager(this)
+        skillManager = SkillManager(this)
         sidebarManager = SidebarManager(this, protectionManager)
         server.pluginManager.registerEvents(sidebarManager, this)
         actionBarManager = ActionBarManager(this, protectionManager)
@@ -112,6 +116,7 @@ class NyaruPlugin : JavaPlugin() {
         server.pluginManager.registerEvents(JobSelectGui.JobSelectListener(this), this)
         server.pluginManager.registerEvents(ShopGui.ShopGuiListener(this), this)
         server.pluginManager.registerEvents(SkillGui.SkillGuiListener(this), this)
+        server.pluginManager.registerEvents(EnhanceGui.EnhanceGuiListener(this), this)
         server.pluginManager.registerEvents(BlockBreakListener(this, skillManager), this)
         server.pluginManager.registerEvents(BlockDropListener(this, skillManager), this)
         server.pluginManager.registerEvents(BlockPlaceListener(this, skillManager), this)

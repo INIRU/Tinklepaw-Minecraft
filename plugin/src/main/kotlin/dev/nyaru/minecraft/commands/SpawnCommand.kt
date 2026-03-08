@@ -75,6 +75,7 @@ class SpawnCommand(private val plugin: NyaruPlugin) : CommandExecutor {
                         cancel()
                         return
                     }
+                    plugin.actionBarManager.refresh(uuid)
                     val spawn = player.world.spawnLocation
                     player.teleport(spawn)
                     player.playSound(spawn, Sound.ENTITY_ENDERMAN_TELEPORT, 0.8f, 1.0f)

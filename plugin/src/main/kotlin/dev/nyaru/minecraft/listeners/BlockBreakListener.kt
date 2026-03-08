@@ -3,6 +3,7 @@ package dev.nyaru.minecraft.listeners
 import dev.nyaru.minecraft.NyaruPlugin
 import dev.nyaru.minecraft.skills.SkillManager
 import dev.nyaru.minecraft.util.triggerLevelUp
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Material
 import org.bukkit.Sound
 import org.bukkit.NamespacedKey
@@ -11,6 +12,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.block.BlockBreakEvent
+import org.bukkit.event.block.BlockDropItemEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import java.util.LinkedList
@@ -18,6 +20,7 @@ import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 val HARVEST_TIME_KEY = NamespacedKey("nyaru", "harvest_time")
+val CROP_USAGE_KEY = NamespacedKey("nyaru", "crop_usage")
 
 private val CROP_MATERIALS = setOf(
     Material.WHEAT, Material.POTATOES, Material.CARROTS,
@@ -29,21 +32,35 @@ private val AGEABLE_CROPS = setOf(
     Material.WHEAT, Material.POTATOES, Material.CARROTS, Material.BEETROOTS, Material.COCOA
 )
 
-private val CROP_DROP_ITEM = mapOf(
-    Material.WHEAT to Material.WHEAT,
-    Material.POTATOES to Material.POTATO,
-    Material.CARROTS to Material.CARROT,
-    Material.SUGAR_CANE to Material.SUGAR_CANE,
-    Material.PUMPKIN to Material.PUMPKIN,
-    Material.MELON to Material.MELON_SLICE,
-    Material.BEETROOTS to Material.BEETROOT,
-    Material.COCOA to Material.COCOA_BEANS
+private val CROP_XP = mapOf(
+    Material.WHEAT to 3,
+    Material.POTATOES to 3,
+    Material.CARROTS to 3,
+    Material.BEETROOTS to 4,
+    Material.SUGAR_CANE to 2,
+    Material.PUMPKIN to 5,
+    Material.MELON to 5,
+    Material.COCOA to 4
 )
 
-private val SEED_MATERIALS = setOf(
-    Material.WHEAT_SEEDS, Material.BEETROOT_SEEDS,
-    Material.MELON_SEEDS, Material.PUMPKIN_SEEDS,
-    Material.TORCHFLOWER_SEEDS, Material.PITCHER_POD
+private data class CropDropInfo(
+    val sellMaterial: Material,
+    val sellName: String,
+    val plantMaterial: Material,
+    val plantName: String,
+    val sellRange: IntRange = 1..2,
+    val plantCount: Int = 1
+)
+
+private val CROP_DROPS = mapOf(
+    Material.WHEAT to CropDropInfo(Material.WHEAT, "밀", Material.WHEAT_SEEDS, "밀 씨앗"),
+    Material.POTATOES to CropDropInfo(Material.POTATO, "감자", Material.POTATO, "감자", 1..3),
+    Material.CARROTS to CropDropInfo(Material.CARROT, "당근", Material.CARROT, "당근", 1..3),
+    Material.BEETROOTS to CropDropInfo(Material.BEETROOT, "비트", Material.BEETROOT_SEEDS, "비트 씨앗"),
+    Material.COCOA to CropDropInfo(Material.COCOA_BEANS, "코코아", Material.COCOA_BEANS, "코코아", 1..2),
+    Material.SUGAR_CANE to CropDropInfo(Material.SUGAR_CANE, "사탕수수", Material.SUGAR_CANE, "사탕수수"),
+    Material.PUMPKIN to CropDropInfo(Material.PUMPKIN, "호박", Material.PUMPKIN_SEEDS, "호박 씨앗"),
+    Material.MELON to CropDropInfo(Material.MELON_SLICE, "수박", Material.MELON_SEEDS, "수박 씨앗", 3..7)
 )
 
 val LOG_MATERIALS = setOf(
@@ -74,6 +91,41 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
     // Prevent recursive wide harvest / timber
     private val wideHarvestActive = ConcurrentHashMap.newKeySet<UUID>()
     private val timberActive = ConcurrentHashMap.newKeySet<UUID>()
+    private val legacy = LegacyComponentSerializer.legacySection()
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onCropDrop(event: BlockDropItemEvent) {
+        val blockType = event.blockState.type
+        if (blockType !in CROP_MATERIALS) return
+
+        // For ageable crops, only apply custom drops when fully grown
+        if (blockType in AGEABLE_CROPS) {
+            val data = event.blockState.blockData
+            if (data is Ageable && data.age < data.maximumAge) {
+                // Not fully grown — replace all drops with 1 plant item
+                event.items.forEach { it.remove() }
+                val dropInfo = CROP_DROPS[blockType] ?: return
+                event.block.world.dropItemNaturally(
+                    event.block.location.add(0.5, 0.5, 0.5),
+                    createPlantItem(dropInfo)
+                )
+                return
+            }
+        }
+
+        val dropInfo = CROP_DROPS[blockType] ?: return
+
+        // Remove all vanilla drops
+        event.items.forEach { it.remove() }
+
+        // Calculate harvest fortune bonus (farmer only)
+        val uuid = event.player.uniqueId
+        val harvestFortune = if (plugin.dataManager.getPlayer(uuid)?.job == "farmer") {
+            skillManager.getSkills(uuid).getLevel("harvest_fortune")
+        } else 0
+
+        dropCustomCropItems(event.block.location, blockType, harvestFortune)
+    }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     fun onBlockBreak(event: BlockBreakEvent) {
@@ -83,35 +135,6 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
 
         // ── Farmer crop logic ──────────────────────────────────────────────
         if (blockType in CROP_MATERIALS) {
-            // Tag dropped items with harvest time; remove seeds
-            plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                val items = event.block.location.world?.getNearbyEntities(
-                    event.block.location.add(0.5, 0.5, 0.5), 2.0, 2.0, 2.0
-                )?.filterIsInstance<org.bukkit.entity.Item>() ?: return@Runnable
-
-                for (item in items) {
-                    if (item.itemStack.type in SEED_MATERIALS) {
-                        item.remove()
-                        continue
-                    }
-                    item.itemStack.editMeta { meta ->
-                        val windowMs = 5 * 60 * 1000L
-                        val roundedTime = (System.currentTimeMillis() / windowMs) * windowMs
-                        meta.persistentDataContainer.set(
-                            HARVEST_TIME_KEY,
-                            PersistentDataType.LONG,
-                            roundedTime
-                        )
-                        val legacy = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection()
-                        meta.lore(listOf(
-                            legacy.deserialize("§b✦ 신선한 농작물"),
-                            legacy.deserialize("§7상점에서 높은 가격을 받습니다."),
-                            legacy.deserialize("§7시간이 지날수록 신선도가 감소합니다.")
-                        ))
-                    }
-                }
-            }, 1L)
-
             val skills = skillManager.getSkills(uuid)
 
             // Wide Harvest: 3x3 crop break
@@ -119,8 +142,8 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 wideHarvestActive.add(uuid)
                 val center = event.block.location
                 val world = center.world ?: run { wideHarvestActive.remove(uuid); return }
-                val tool = player.inventory.itemInMainHand
                 player.playSound(player.location, Sound.ITEM_CROP_PLANT, 0.7f, 1.2f)
+                val harvestFortune = skills.getLevel("harvest_fortune")
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     try {
                         for (dx in -1..1) {
@@ -132,15 +155,9 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                                 if (neighbor.type in AGEABLE_CROPS) {
                                     val data = neighbor.blockData
                                     if (data is Ageable && data.age >= data.maximumAge) {
-                                        val neighborLoc = neighbor.location.clone()
-                                        neighbor.breakNaturally(tool)
-                                        plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                                            neighborLoc.world?.getNearbyEntities(
-                                                neighborLoc.add(0.5, 0.5, 0.5), 1.5, 1.5, 1.5
-                                            )?.filterIsInstance<org.bukkit.entity.Item>()
-                                                ?.filter { it.itemStack.type in SEED_MATERIALS }
-                                                ?.forEach { it.remove() }
-                                        }, 2L)
+                                        val neighborType = neighbor.type
+                                        neighbor.type = Material.AIR
+                                        dropCustomCropItems(neighbor.location, neighborType, harvestFortune)
                                     }
                                 }
                             }
@@ -151,24 +168,10 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 })
             }
 
-            // Harvest Fortune: extra drops
-            val harvestFortune = skills.getLevel("harvest_fortune")
-            if (harvestFortune > 0 && blockType in CROP_MATERIALS) {
-                val dropMaterial = CROP_DROP_ITEM[blockType]
-                if (dropMaterial != null) {
-                    player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.4f)
-                    plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                        event.block.location.world?.dropItemNaturally(
-                            event.block.location.add(0.5, 0.5, 0.5),
-                            ItemStack(dropMaterial, harvestFortune)
-                        )
-                    }, 2L)
-                }
-            }
-
-            // Grant XP for crop harvest (farmer only) — direct local call, no coroutine
+            // Grant XP for crop harvest (farmer only) — crop-specific XP
             if (plugin.dataManager.getPlayer(uuid)?.job == "farmer") {
-                val result = plugin.dataManager.grantXp(uuid, 2)
+                val xpAmount = CROP_XP[blockType] ?: 2
+                val result = plugin.dataManager.grantXp(uuid, xpAmount)
                 if (result != null) {
                     plugin.actionBarManager.updateXp(uuid, result.level, result.xp)
                     if (result.leveledUp) {
@@ -209,6 +212,49 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 })
             }
         }
+    }
+
+    private fun dropCustomCropItems(loc: org.bukkit.Location, cropType: Material, harvestFortune: Int = 0) {
+        val dropInfo = CROP_DROPS[cropType] ?: return
+        val world = loc.world ?: return
+        val dropLoc = loc.clone().add(0.5, 0.5, 0.5)
+
+        val sellCount = dropInfo.sellRange.random() + harvestFortune
+        for (i in 0 until sellCount) {
+            world.dropItemNaturally(dropLoc, createSellItem(dropInfo))
+        }
+        for (i in 0 until dropInfo.plantCount) {
+            world.dropItemNaturally(dropLoc, createPlantItem(dropInfo))
+        }
+    }
+
+    private fun createSellItem(info: CropDropInfo): ItemStack {
+        val item = ItemStack(info.sellMaterial)
+        item.editMeta { meta ->
+            meta.persistentDataContainer.set(CROP_USAGE_KEY, PersistentDataType.STRING, "sell")
+            val windowMs = 5 * 60 * 1000L
+            val roundedTime = (System.currentTimeMillis() / windowMs) * windowMs
+            meta.persistentDataContainer.set(HARVEST_TIME_KEY, PersistentDataType.LONG, roundedTime)
+            meta.displayName(legacy.deserialize("§e${info.sellName} §7(판매용)"))
+            meta.lore(listOf(
+                legacy.deserialize("§7상점에서 판매할 수 있습니다."),
+                legacy.deserialize("§b✦ 신선한 농작물"),
+                legacy.deserialize("§7시간이 지날수록 신선도가 감소합니다.")
+            ))
+        }
+        return item
+    }
+
+    private fun createPlantItem(info: CropDropInfo): ItemStack {
+        val item = ItemStack(info.plantMaterial)
+        item.editMeta { meta ->
+            meta.persistentDataContainer.set(CROP_USAGE_KEY, PersistentDataType.STRING, "plant")
+            meta.displayName(legacy.deserialize("§a${info.plantName} §7(심는용)"))
+            meta.lore(listOf(
+                legacy.deserialize("§7밭에 심을 수 있습니다.")
+            ))
+        }
+        return item
     }
 
     private fun breakConnectedLogs(

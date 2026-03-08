@@ -123,10 +123,15 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
     fun handleClick(event: InventoryClickEvent) {
         val slot = event.rawSlot
 
-        // Allow only the tool slot to receive items
+        // Allow clicks in the player's own inventory (pickup/place items)
+        if (slot >= INV_SIZE) {
+            Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton() })
+            return
+        }
+
+        // Allow the tool slot to receive items
         if (slot == TOOL_SLOT) {
             event.isCancelled = false
-            // Schedule button update after item placement
             Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton() })
             return
         }
@@ -164,6 +169,7 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
         }
 
         plugin.dataManager.spendBalance(player.uniqueId, cost)
+        plugin.actionBarManager.refresh(player.uniqueId)
         plugin.dataManager.save(player.uniqueId)
 
         // 50% success, 50% fail
