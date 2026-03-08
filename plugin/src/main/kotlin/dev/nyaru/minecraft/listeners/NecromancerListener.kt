@@ -8,6 +8,7 @@ import org.bukkit.NamespacedKey
 import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.attribute.Attribute
+import org.bukkit.entity.Creature
 import org.bukkit.entity.LivingEntity
 import org.bukkit.entity.Mob
 import org.bukkit.entity.Monster
@@ -96,6 +97,26 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         player.sendMessage("§5§l☠ 미니언을 소환했습니다! §7(좀비: ${total}마리)")
     }
 
+    // ── Retaliation: when owner is hit, minions target the attacker ────────
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onOwnerDamaged(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Player ?: return
+        val attacker = event.damager as? Mob ?: return
+        if (plugin.minionManager.isAnyMinion(attacker)) return
+
+        val uuid = victim.uniqueId
+        val job = plugin.dataManager.getPlayer(uuid)?.job ?: return
+        if (job != Jobs.NECROMANCER) return
+
+        // Set all minions to target the attacker
+        for (minion in plugin.minionManager.getMinions(uuid)) {
+            if (minion.isDead) continue
+            if (minion is Creature) {
+                minion.target = attacker
+            }
+        }
+    }
+
     // ── Life Siphon: minion deals damage → heal owner ──────────────────────
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onMinionDamage(event: EntityDamageByEntityEvent) {
@@ -172,21 +193,61 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         damager.sendActionBar(legacy.deserialize("§5§l🌑 암흑 오라 발동! §7주변 적에게 슬로우+어둠 적용"))
     }
 
-    // ── Mind Control: necromancer kills a mob → chance to convert it ────────
-    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-    fun onNecromancerKill(event: EntityDeathEvent) {
+    // ── Entity death: handle minion deaths, minion kills, and mind control ──
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onEntityDeath(event: EntityDeathEvent) {
         val dead = event.entity
-        if (dead !is Mob) return
-        if (dead is Player) return
-        // Skip minions
-        if (plugin.minionManager.isAnyMinion(dead)) return
 
-        val killer = dead.killer ?: return
-        val uuid = killer.uniqueId
-        val job = plugin.dataManager.getPlayer(uuid)?.job ?: return
-        if (job != Jobs.NECROMANCER) return
+        // Dead entity is a minion: clear drops and XP
+        if (dead is Mob && plugin.minionManager.isAnyMinion(dead)) {
+            event.drops.clear()
+            event.droppedExp = 0
+            return
+        }
 
-        val skills = plugin.dataManager.getSkills(uuid)
+        // Find the necromancer owner — either direct player kill or minion kill
+        var owner: Player? = null
+        var ownerUuid: UUID? = null
+
+        // Case 1: Player directly killed the mob
+        val directKiller = dead.killer
+        if (directKiller != null) {
+            val job = plugin.dataManager.getPlayer(directKiller.uniqueId)?.job
+            if (job == Jobs.NECROMANCER) {
+                owner = directKiller
+                ownerUuid = directKiller.uniqueId
+            }
+        }
+
+        // Case 2: Minion killed the mob
+        if (owner == null) {
+            val lastDmg = dead.lastDamageCause as? EntityDamageByEntityEvent
+            val damager = lastDmg?.damager as? Mob
+            if (damager != null) {
+                val minionOwnerStr = damager.persistentDataContainer.get(ownerKey, PersistentDataType.STRING)
+                if (minionOwnerStr != null) {
+                    ownerUuid = runCatching { UUID.fromString(minionOwnerStr) }.getOrNull()
+                    owner = ownerUuid?.let { plugin.server.getPlayer(it) }
+                }
+            }
+        }
+
+        if (owner == null || ownerUuid == null) return
+
+        // Grant XP for minion kills
+        if (directKiller == null) {
+            val result = plugin.dataManager.grantXp(ownerUuid, 8)
+            if (result != null) {
+                plugin.actionBarManager.updateXp(ownerUuid, result.level, result.xp)
+                if (result.leveledUp) {
+                    dev.nyaru.minecraft.util.triggerLevelUp(plugin, owner, result.level, result.newSkillPoints)
+                }
+            }
+        }
+
+        // Mind Control: chance to convert killed mob (all Mob types, not just Monster)
+        if (dead !is Mob || dead is Player) return
+        val skills = plugin.dataManager.getSkills(ownerUuid)
         val mindControlLv = skills.getLevel("mind_control")
         if (mindControlLv <= 0) return
 
@@ -196,51 +257,20 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         if (Math.random() > chance) return
 
         val soulEmpowerLv = skills.getLevel("soul_empower")
+        val deadType = dead.type
+        val deadLoc = dead.location.clone()
+        val finalOwner = owner
         plugin.server.scheduler.runTask(plugin, Runnable {
             plugin.minionManager.summonControlled(
-                killer, dead.type, dead.location, mindControlLv, soulEmpowerLv
+                finalOwner, deadType, deadLoc, mindControlLv, soulEmpowerLv
             )
-            killer.world.spawnParticle(
-                org.bukkit.Particle.SOUL,
-                dead.location.add(0.0, 1.0, 0.0),
+            finalOwner.world.spawnParticle(
+                Particle.SOUL,
+                deadLoc.add(0.0, 1.0, 0.0),
                 10, 0.3, 0.3, 0.3, 0.05
             )
-            killer.sendActionBar(legacy.deserialize("§5§l🧠 정신지배! §7처치한 몹을 하수인으로 부활시켰습니다."))
+            finalOwner.sendActionBar(legacy.deserialize("§5§l🧠 정신지배! §7처치한 몹을 하수인으로 부활시켰습니다."))
         })
-    }
-
-    // ── XP grant and drop prevention when minion kills a mob ───────────────
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    fun onEntityDeath(event: EntityDeathEvent) {
-        val dead = event.entity
-        val ownerUuidStr = dead.persistentDataContainer.get(ownerKey, PersistentDataType.STRING)
-
-        // Dead entity is a minion: clear drops and XP
-        if (ownerUuidStr != null) {
-            event.drops.clear()
-            event.droppedExp = 0
-            return
-        }
-
-        // Dead entity was killed by a minion
-        val killer = dead.killer ?: return
-        // killer is a Player — check if they are the minion owner via the damager entity
-        // EntityDeathEvent gives us the killer Player, not the minion
-        // We need to check the last damager via EntityDamageByEntityEvent stored on the entity
-        val lastDamageCause = dead.lastDamageCause as? EntityDamageByEntityEvent ?: return
-        val minionDamager = lastDamageCause.damager as? Mob ?: return
-        val minionOwnerStr = minionDamager.persistentDataContainer.get(ownerKey, PersistentDataType.STRING) ?: return
-        val ownerUuid = runCatching { UUID.fromString(minionOwnerStr) }.getOrNull() ?: return
-
-        val owner = plugin.server.getPlayer(ownerUuid) ?: return
-
-        val result = plugin.dataManager.grantXp(ownerUuid, 8)
-        if (result != null) {
-            plugin.actionBarManager.updateXp(ownerUuid, result.level, result.xp)
-            if (result.leveledUp) {
-                dev.nyaru.minecraft.util.triggerLevelUp(plugin, owner, result.level, result.newSkillPoints)
-            }
-        }
     }
 
     // ── Cleanup minions on player quit ─────────────────────────────────────

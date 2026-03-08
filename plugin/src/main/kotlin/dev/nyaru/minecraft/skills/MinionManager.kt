@@ -172,10 +172,10 @@ class MinionManager(private val plugin: NyaruPlugin) {
                         continue
                     }
 
-                    // Find nearest mob within 12 blocks of owner (all mobs, exclude players & minions)
+                    // Only auto-target hostile mobs (Monster), not passive mobs like horses
                     val target = ownerLoc.world?.getNearbyEntities(ownerLoc, 12.0, 12.0, 12.0)
-                        ?.filterIsInstance<Mob>()
-                        ?.filter { it !is Player && !isAnyMinion(it) }
+                        ?.filterIsInstance<Monster>()
+                        ?.filter { !isAnyMinion(it) }
                         ?.minByOrNull { it.location.distanceSquared(ownerLoc) }
 
                     if (target != null) {
