@@ -70,15 +70,16 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                 }
             }
             if (maceLv >= 2) {
-                // Launch player upward
-                val vel = damager.velocity
-                damager.velocity = vel.setY(vel.y + 0.8)
-            }
-            if (maceLv >= 3) {
-                // Reset fall distance after launch
-                plugin.server.scheduler.runTaskLater(plugin, Runnable {
-                    damager.fallDistance = 0f
-                }, 2L)
+                // 위로 붕 뜨기 - 강하게 발사
+                plugin.server.scheduler.runTask(plugin, Runnable {
+                    damager.velocity = damager.velocity.setY(1.3)
+                    damager.playSound(damager.location, Sound.ENTITY_BREEZE_JUMP, 1.0f, 0.8f)
+                    damager.world.spawnParticle(
+                        Particle.CLOUD,
+                        damager.location,
+                        10, 0.3, 0.1, 0.3, 0.05
+                    )
+                })
             }
         }
 

@@ -485,9 +485,16 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         // Calculate price with bonuses
         val basePrice = shopItem.sellPrice.toDouble()
 
-        val purityBonus: Double = if (purity != null) {
-            basePrice * (0.8 + purity / 100.0 * 0.2)
-        } else basePrice
+        // 순정도 등급 보너스: 매우낮음(1)=x1.0, 낮음(2)=x1.1, 중간(3)=x1.25, 높은(4)=x1.5
+        val purityMultiplier: Double = when (purity) {
+            4 -> 1.5
+            3 -> 1.25
+            2 -> 1.1
+            1 -> 1.0
+            else -> 1.0
+        }
+
+        val purityBonus = basePrice * (if (purity != null) purityMultiplier else 1.0)
 
         val finalUnitPrice: Double = if (freshnessPct != null) {
             purityBonus * (0.6 + freshnessPct / 100.0 * 0.4)
@@ -498,13 +505,21 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         plugin.dataManager.addBalance(player.uniqueId, totalEarnings)
         plugin.dataManager.save(player.uniqueId)
 
+        val purityName = when (purity) {
+            4 -> "§d높은"
+            3 -> "§b중간"
+            2 -> "§a낮음"
+            1 -> "§7매우 낮음"
+            else -> null
+        }
+
         player.playSound(player.location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.2f)
         player.sendMessage("§a${shopItem.displayName} §f${qty}개 판매! §6+${totalEarnings}냥")
         if (freshnessPct != null) {
             player.sendMessage("§7신선도: §e${String.format("%.0f", freshnessPct)}%")
         }
-        if (purity != null) {
-            player.sendMessage("§7순정도: §e${purity}%")
+        if (purityName != null) {
+            player.sendMessage("§7순정도: ${purityName}")
         }
         player.closeInventory()
     }

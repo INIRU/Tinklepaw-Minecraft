@@ -21,21 +21,20 @@ class SmeltListener(private val plugin: NyaruPlugin, private val skillManager: S
         val purity = sourceMeta.persistentDataContainer.get(PURITY_KEY, PersistentDataType.INTEGER)
             ?: return
 
-        // Copy purity to the result item
+        // Copy purity tier to the result item
         val result = event.result.clone()
         result.editMeta { meta ->
             meta.persistentDataContainer.set(PURITY_KEY, PersistentDataType.INTEGER, purity)
 
-            val purityColor = when {
-                purity >= 90 -> "§d"
-                purity >= 75 -> "§b"
-                purity >= 60 -> "§a"
-                else -> "§7"
+            val (tierName, tierColor) = when (purity) {
+                4 -> "높은" to "§d"
+                3 -> "중간" to "§b"
+                2 -> "낮음" to "§a"
+                else -> "매우 낮음" to "§7"
             }
             meta.lore(listOf(
-                legacy.deserialize("${purityColor}✦ 순도: §f${purity}%"),
-                legacy.deserialize("§7상점에서 높은 가격을 받습니다."),
-                legacy.deserialize("§7Y좌표가 낮을수록 순도가 높아집니다.")
+                legacy.deserialize("${tierColor}✦ 순도: ${tierName}"),
+                legacy.deserialize("§7상점에서 높은 가격을 받습니다.")
             ))
         }
         event.result = result

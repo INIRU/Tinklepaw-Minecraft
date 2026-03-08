@@ -38,13 +38,14 @@ class BlockDropListener(private val plugin: NyaruPlugin, private val skillManage
         val y = event.blockState.y
         val baseRandom = 60 + (Math.random() * 40).toInt()
         val yBonus = max(0, (-y / 6))
-        val purity = (baseRandom + yBonus).coerceIn(50, 100)
+        val rawPurity = (baseRandom + yBonus).coerceIn(50, 100)
 
-        val purityColor = when {
-            purity >= 90 -> "§d"
-            purity >= 75 -> "§b"
-            purity >= 60 -> "§a"
-            else -> "§7"
+        // 등급제: 4단계로 고정 (스택 가능하도록)
+        val (purityTier, tierName, tierColor) = when {
+            rawPurity >= 90 -> Triple(4, "높은", "§d")
+            rawPurity >= 75 -> Triple(3, "중간", "§b")
+            rawPurity >= 60 -> Triple(2, "낮음", "§a")
+            else -> Triple(1, "매우 낮음", "§7")
         }
 
         for (item in event.items) {
@@ -52,11 +53,11 @@ class BlockDropListener(private val plugin: NyaruPlugin, private val skillManage
                 meta.persistentDataContainer.set(
                     PURITY_KEY,
                     PersistentDataType.INTEGER,
-                    purity
+                    purityTier
                 )
                 val legacy = LegacyComponentSerializer.legacySection()
                 meta.lore(listOf(
-                    legacy.deserialize("${purityColor}✦ 순정도: §f${purity}%"),
+                    legacy.deserialize("${tierColor}✦ 순정도: ${tierName}"),
                     legacy.deserialize("§7상점에서 높은 가격을 받습니다."),
                     legacy.deserialize("§7Y좌표가 낮을수록 순정도가 높아집니다.")
                 ))
