@@ -142,6 +142,8 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 wideHarvestActive.add(uuid)
                 val center = event.block.location
                 val world = center.world ?: run { wideHarvestActive.remove(uuid); return }
+                val pm = plugin.protectionManager
+                val playerUuidStr = uuid.toString()
                 player.playSound(player.location, Sound.ITEM_CROP_PLANT, 0.7f, 1.2f)
                 val harvestFortune = skills.getLevel("harvest_fortune")
                 plugin.server.scheduler.runTask(plugin, Runnable {
@@ -152,6 +154,8 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                                 val neighbor = world.getBlockAt(
                                     center.blockX + dx, center.blockY, center.blockZ + dz
                                 )
+                                // Skip protected blocks
+                                if (pm.isProtected(neighbor.location) && !pm.canAccess(neighbor.location, playerUuidStr)) continue
                                 if (neighbor.type in AGEABLE_CROPS) {
                                     val data = neighbor.blockData
                                     if (data is Ageable && data.age >= data.maximumAge) {
@@ -281,16 +285,21 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
             for ((dx, dy, dz) in offsets) {
                 val neighbor = current.getRelative(dx, dy, dz)
                 if (neighbor in visited) continue
-                // Skip protected blocks — don't chain through them
+                val isLog = neighbor.type == logType
+                val isLeaf = breakLeaves && neighbor.type in LEAF_MATERIALS
+                if (!isLog && !isLeaf) continue
+
+                // Protection check for ALL chained blocks (logs + leaves)
                 if (pm.isProtected(neighbor.location) && !pm.canAccess(neighbor.location, playerUuid)) {
                     visited.add(neighbor)
                     continue
                 }
-                if (neighbor.type == logType) {
+
+                if (isLog) {
                     visited.add(neighbor)
                     queue.add(neighbor)
                     neighbor.breakNaturally(tool)
-                } else if (breakLeaves && neighbor.type in LEAF_MATERIALS) {
+                } else {
                     visited.add(neighbor)
                     neighbor.breakNaturally(tool)
                 }

@@ -205,8 +205,11 @@ object SkillRegistry {
             listOf("§7주변 적에게 슬로우+어둠 효과를 줍니다.", "§7Lv1: 3초 / Lv2: 5초 / Lv3: 7초", "§7범위: 8블록, 쿨다운: 15초"),
             "WITHER_ROSE"),
         SkillDef("soul_empower", "§5💀 영혼 강화", "necromancer", 3, listOf(4, 9, 16),
-            listOf("§7미니언의 체력과 공격력을 강화합니다.", "§7Lv1: +25% / Lv2: +50% / Lv3: +100%"),
-            "SOUL_LANTERN")
+            listOf("§7미니언의 체력, 공격력, 이동속도를 강화합니다.", "§7Lv1: +25%/+10%속도 / Lv2: +50%/+25% / Lv3: +100%/+50%"),
+            "SOUL_LANTERN"),
+        SkillDef("mind_control", "§5🧠 정신지배", "necromancer", 3, listOf(6, 11, 18),
+            listOf("§7몹 처치 시 해당 몹을 미니언으로 부활시킵니다.", "§7Lv1: 30% 확률 / Lv2: 50% / Lv3: 70%", "§7부활 미니언: 체력 매우 낮음, 30초 지속"),
+            "SCULK_SHRIEKER")
     )
 
     fun forJob(job: String): List<SkillDef> = ALL.filter { it.job == job }

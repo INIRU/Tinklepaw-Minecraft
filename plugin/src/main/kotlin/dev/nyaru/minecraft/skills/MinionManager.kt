@@ -15,6 +15,8 @@ import org.bukkit.entity.Skeleton
 import org.bukkit.entity.Zombie
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -67,6 +69,24 @@ class MinionManager(private val plugin: NyaruPlugin) {
         mob.isCustomNameVisible = true
         mob.removeWhenFarAway = false
         mob.isPersistent = false
+        mob.isSilent = true
+
+        // Invisible body, armor still visible
+        mob.addPotionEffect(PotionEffect(
+            PotionEffectType.INVISIBILITY,
+            Integer.MAX_VALUE,
+            0,
+            false, false, false
+        ))
+
+        // Fast movement speed (base 0.4, soul empower scales up to 0.5)
+        val speedMultiplier = when (soulEmpowerLevel) {
+            1 -> 1.1
+            2 -> 1.25
+            3 -> 1.5
+            else -> 1.0
+        }
+        mob.getAttribute(Attribute.MOVEMENT_SPEED)?.baseValue = (0.4 * speedMultiplier).coerceAtMost(0.6)
 
         // Apply soul empower bonuses
         val hpMultiplier = when (soulEmpowerLevel) {
@@ -90,6 +110,47 @@ class MinionManager(private val plugin: NyaruPlugin) {
         if (dmgAttr != null) {
             dmgAttr.baseValue = 2.0 * dmgMultiplier
         }
+    }
+
+    fun summonControlled(player: Player, entityType: EntityType, deathLoc: Location, mindControlLevel: Int, soulEmpowerLevel: Int) {
+        val mob = deathLoc.world?.spawn(deathLoc, entityType.entityClass as Class<out Mob>) ?: return
+        mob.persistentDataContainer.set(ownerKey, PersistentDataType.STRING, player.uniqueId.toString())
+        mob.persistentDataContainer.set(spawnTimeKey, PersistentDataType.LONG, System.currentTimeMillis())
+        mob.isCustomNameVisible = true
+        mob.removeWhenFarAway = false
+        mob.isPersistent = false
+        mob.isSilent = true
+        mob.customName(
+            net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection()
+                .deserialize("§5[지배] §f${player.name}의 하수인")
+        )
+
+        // Invisible body
+        mob.addPotionEffect(PotionEffect(
+            PotionEffectType.INVISIBILITY,
+            Integer.MAX_VALUE, 0,
+            false, false, false
+        ))
+
+        // Very low HP — dies in ~1 hit (2/3/4)
+        val hp = (1.0 + mindControlLevel).coerceAtMost(4.0)
+        mob.getAttribute(Attribute.MAX_HEALTH)?.baseValue = hp
+        mob.health = hp
+
+        // Moderate attack damage (3/4/5)
+        mob.getAttribute(Attribute.ATTACK_DAMAGE)?.let { it.baseValue = 2.0 + mindControlLevel }
+
+        // Speed
+        val speedMultiplier = when (soulEmpowerLevel) {
+            1 -> 1.1; 2 -> 1.25; 3 -> 1.5; else -> 1.0
+        }
+        mob.getAttribute(Attribute.MOVEMENT_SPEED)?.baseValue = (0.4 * speedMultiplier).coerceAtMost(0.6)
+
+        // Short-lived: override spawn time so it expires in 30 seconds
+        mob.persistentDataContainer.set(spawnTimeKey, PersistentDataType.LONG,
+            System.currentTimeMillis() - 270_000L) // 300s - 30s = already 270s old
+
+        minionMap.getOrPut(player.uniqueId) { mutableListOf() }.add(mob)
     }
 
     fun removeMinions(uuid: UUID) {
@@ -132,10 +193,10 @@ class MinionManager(private val plugin: NyaruPlugin) {
                         continue
                     }
 
-                    // Find nearest hostile mob within 12 blocks of owner
+                    // Find nearest hostile mob within 12 blocks of owner (exclude all minions)
                     val target = ownerLoc.world?.getNearbyEntities(ownerLoc, 12.0, 12.0, 12.0)
                         ?.filterIsInstance<Monster>()
-                        ?.filter { it.uniqueId != uuid && !isMinionOf(it, uuid) }
+                        ?.filter { it.uniqueId != uuid && !isAnyMinion(it) }
                         ?.minByOrNull { it.location.distanceSquared(ownerLoc) }
 
                     if (target != null) {
@@ -153,7 +214,13 @@ class MinionManager(private val plugin: NyaruPlugin) {
         }, 20L, 20L)
     }
 
-    private fun isMinionOf(entity: Mob, ownerUuid: UUID): Boolean {
+    fun isAnyMinion(entity: org.bukkit.entity.Entity): Boolean {
+        if (entity !is Mob) return false
+        return entity.persistentDataContainer.has(ownerKey, PersistentDataType.STRING)
+    }
+
+    fun isMinionOf(entity: org.bukkit.entity.Entity, ownerUuid: UUID): Boolean {
+        if (entity !is Mob) return false
         val storedOwner = entity.persistentDataContainer.get(ownerKey, PersistentDataType.STRING) ?: return false
         return storedOwner == ownerUuid.toString()
     }

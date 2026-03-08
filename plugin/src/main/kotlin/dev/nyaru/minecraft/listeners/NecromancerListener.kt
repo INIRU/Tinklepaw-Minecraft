@@ -106,7 +106,7 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
     }
 
     // ── Life Siphon: minion deals damage → heal owner ──────────────────────
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onMinionDamage(event: EntityDamageByEntityEvent) {
         val damager = event.damager as? Mob ?: return
         val ownerUuidStr = damager.persistentDataContainer.get(ownerKey, PersistentDataType.STRING) ?: return
@@ -115,6 +115,12 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         // Prevent friendly fire: cancel if minion attacks its own owner
         val victim = event.entity
         if (victim is Player && victim.uniqueId == ownerUuid) {
+            event.isCancelled = true
+            return
+        }
+
+        // Prevent minion-on-minion damage (any minion hitting any minion)
+        if (plugin.minionManager.isAnyMinion(victim)) {
             event.isCancelled = true
             return
         }
@@ -173,6 +179,42 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
             20, 2.0, 1.0, 2.0, 0.05
         )
         damager.sendActionBar(legacy.deserialize("§5§l🌑 암흑 오라 발동! §7주변 적에게 슬로우+어둠 적용"))
+    }
+
+    // ── Mind Control: necromancer kills a mob → chance to convert it ────────
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+    fun onNecromancerKill(event: EntityDeathEvent) {
+        val dead = event.entity
+        if (dead !is Monster) return
+        // Skip minions
+        if (plugin.minionManager.isAnyMinion(dead)) return
+
+        val killer = dead.killer ?: return
+        val uuid = killer.uniqueId
+        val job = plugin.dataManager.getPlayer(uuid)?.job ?: return
+        if (job != Jobs.NECROMANCER) return
+
+        val skills = plugin.dataManager.getSkills(uuid)
+        val mindControlLv = skills.getLevel("mind_control")
+        if (mindControlLv <= 0) return
+
+        val chance = when (mindControlLv) {
+            1 -> 0.30; 2 -> 0.50; 3 -> 0.70; else -> 0.0
+        }
+        if (Math.random() > chance) return
+
+        val soulEmpowerLv = skills.getLevel("soul_empower")
+        plugin.server.scheduler.runTask(plugin, Runnable {
+            plugin.minionManager.summonControlled(
+                killer, dead.type, dead.location, mindControlLv, soulEmpowerLv
+            )
+            killer.world.spawnParticle(
+                org.bukkit.Particle.SOUL,
+                dead.location.add(0.0, 1.0, 0.0),
+                10, 0.3, 0.3, 0.3, 0.05
+            )
+            killer.sendActionBar(legacy.deserialize("§5§l🧠 정신지배! §7처치한 몹을 하수인으로 부활시켰습니다."))
+        })
     }
 
     // ── XP grant and drop prevention when minion kills a mob ───────────────
