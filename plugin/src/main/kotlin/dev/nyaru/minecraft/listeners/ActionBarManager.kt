@@ -98,12 +98,13 @@ class ActionBarManager(private val plugin: NyaruPlugin, private val pm: Protecti
     }
 
     private fun startDisplayLoop() {
+        // 20틱(1초) 간격으로 전송해야 액션바가 끊기지 않음 (액션바는 ~2초 후 사라짐)
         Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, Runnable {
             for (player in Bukkit.getOnlinePlayers()) {
                 val info = cache[player.uniqueId] ?: continue
                 player.sendActionBar(buildActionBarText(info, player.uniqueId))
             }
-        }, 20L, 60L)
+        }, 20L, 20L)
     }
 
     private fun startRefreshLoop() {

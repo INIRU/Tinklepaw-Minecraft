@@ -26,7 +26,8 @@ class AdminCommand(
             "상점" -> handleShop(sender, args)
             "지급" -> handleGive(sender, args)
             "차감" -> handleDeduct(sender, args)
-            else -> sender.sendMessage("§f/나루관리 <npc|상점|지급|차감>")
+            "설정" -> handleSet(sender, args)
+            else -> sender.sendMessage("§f/나루관리 <npc|상점|지급|차감|설정>")
         }
         return true
     }
@@ -110,6 +111,7 @@ class AdminCommand(
             return
         }
         plugin.dataManager.addBalance(target.uniqueId, amount)
+        plugin.actionBarManager.refresh(target.uniqueId)
         sender.sendMessage("§a${target.name}에게 ${amount}냥을 지급했습니다!")
         target.sendMessage("§a관리자로부터 §e${amount}냥§a을 지급받았습니다!")
     }
@@ -128,6 +130,7 @@ class AdminCommand(
         }
         val success = plugin.dataManager.spendBalance(target.uniqueId, amount)
         if (success) {
+            plugin.actionBarManager.refresh(target.uniqueId)
             sender.sendMessage("§a${target.name}에게서 ${amount}냥을 차감했습니다!")
             target.sendMessage("§c관리자에 의해 §e${amount}냥§c이 차감되었습니다.")
         } else {
@@ -136,14 +139,34 @@ class AdminCommand(
         }
     }
 
+    private fun handleSet(sender: CommandSender, args: Array<out String>) {
+        val targetName = args.getOrNull(1)
+        val amount = args.getOrNull(2)?.toIntOrNull()
+        if (targetName == null || amount == null || amount < 0) {
+            sender.sendMessage("§c사용법: /나루관리 설정 <플레이어> <금액>")
+            return
+        }
+        val target = Bukkit.getPlayerExact(targetName)
+        if (target == null) {
+            sender.sendMessage("§c플레이어 §f${targetName}§c을(를) 찾을 수 없습니다.")
+            return
+        }
+        val currentBalance = plugin.dataManager.getBalance(target.uniqueId)
+        val diff = amount - currentBalance
+        plugin.dataManager.addBalance(target.uniqueId, diff)
+        plugin.actionBarManager.refresh(target.uniqueId)
+        sender.sendMessage("§a${target.name}의 냥을 §e${amount}냥§a으로 설정했습니다! §7(이전: ${currentBalance}냥)")
+        target.sendMessage("§e관리자에 의해 냥이 §f${amount}냥§e으로 설정되었습니다.")
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (!sender.hasPermission("nyaru.admin")) return emptyList()
         return when (args.size) {
-            1 -> listOf("npc", "상점", "지급", "차감").filter { it.startsWith(args[0]) }
+            1 -> listOf("npc", "상점", "지급", "차감", "설정").filter { it.startsWith(args[0]) }
             2 -> when (args[0].lowercase()) {
                 "npc" -> listOf("상점", "직업", "강화").filter { it.startsWith(args[1]) }
                 "상점" -> listOf("추가", "제거", "목록").filter { it.startsWith(args[1]) }
-                "지급", "차감" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1]) }
+                "지급", "차감", "설정" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1]) }
                 else -> emptyList()
             }
             3 -> when {
