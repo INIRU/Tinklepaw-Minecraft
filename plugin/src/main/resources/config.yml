@@ -1,0 +1,12 @@
+# Nyaru Minecraft Plugin Config
+api:
+  url: ""  # 환경변수 MINECRAFT_API_URL 권장 (Discord 연동용, 비어있으면 비활성화)
+  key: ""  # 환경변수 MINECRAFT_API_KEY 권장
+
+discord:
+  invite_url: "discord.gg/tinklepaw"
+
+daily-reward: 100   # 매일 첫 접속 보상 (냥)
+home-cost: 1000     # 집으로 귀환 비용 (냥)
+job-change-cost: 500  # 직업 변경 비용 (냥)
+spawn-cost: 1000    # 스폰 귀환 비용 (냥)

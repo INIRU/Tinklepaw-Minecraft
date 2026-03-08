@@ -1,0 +1,190 @@
+package dev.nyaru.minecraft.listeners
+
+import dev.nyaru.minecraft.NyaruPlugin
+import dev.nyaru.minecraft.model.Jobs
+import dev.nyaru.minecraft.skills.SkillManager
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+import org.bukkit.Material
+import org.bukkit.Particle
+import org.bukkit.Sound
+import org.bukkit.entity.LivingEntity
+import org.bukkit.entity.Monster
+import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.Listener
+import org.bukkit.event.entity.EntityDamageByEntityEvent
+import org.bukkit.event.entity.EntityDamageEvent
+import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.potion.PotionEffect
+import org.bukkit.potion.PotionEffectType
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+private val HOE_MATERIALS = setOf(
+    Material.WOODEN_HOE, Material.STONE_HOE, Material.IRON_HOE,
+    Material.GOLDEN_HOE, Material.DIAMOND_HOE, Material.NETHERITE_HOE
+)
+
+private val SWORD_MATERIALS = setOf(
+    Material.WOODEN_SWORD, Material.STONE_SWORD, Material.IRON_SWORD,
+    Material.GOLDEN_SWORD, Material.DIAMOND_SWORD, Material.NETHERITE_SWORD
+)
+
+private val AXE_MATERIALS = setOf(
+    Material.WOODEN_AXE, Material.STONE_AXE, Material.IRON_AXE,
+    Material.GOLDEN_AXE, Material.DIAMOND_AXE, Material.NETHERITE_AXE
+)
+
+class CombatListener(private val plugin: NyaruPlugin, private val skillManager: SkillManager) : Listener {
+
+    private val legacy = LegacyComponentSerializer.legacySection()
+
+    // War cry cooldown: UUID -> timestamp (ms) of last use
+    private val warCryCooldown = ConcurrentHashMap<UUID, Long>()
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onEntityDamageByEntity(event: EntityDamageByEntityEvent) {
+        val damager = event.damager as? Player ?: return
+        val uuid = damager.uniqueId
+        val job = plugin.dataManager.getPlayer(uuid)?.job
+        val skills = skillManager.getSkills(uuid)
+        val heldItem = damager.inventory.itemInMainHand
+
+        // ── Miner: Mace Master ─────────────────────────────────────────────
+        if (heldItem.type == Material.MACE) {
+            val maceLv = skills.getLevel("mace_master")
+            if (maceLv >= 1) {
+                // Cancel durability loss by restoring item damage
+                val meta = heldItem.itemMeta
+                if (meta is org.bukkit.inventory.meta.Damageable) {
+                    val currentDamage = meta.damage
+                    plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                        val item = damager.inventory.itemInMainHand
+                        if (item.type == Material.MACE) {
+                            item.editMeta(org.bukkit.inventory.meta.Damageable::class.java) { m ->
+                                m.damage = currentDamage
+                            }
+                        }
+                    }, 1L)
+                }
+            }
+            if (maceLv >= 2) {
+                // Launch player upward
+                val vel = damager.velocity
+                damager.velocity = vel.setY(vel.y + 0.8)
+            }
+            if (maceLv >= 3) {
+                // Reset fall distance after launch
+                plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                    damager.fallDistance = 0f
+                }, 2L)
+            }
+        }
+
+        // ── Farmer: Life Drain ─────────────────────────────────────────────
+        if (job == Jobs.FARMER && heldItem.type in HOE_MATERIALS) {
+            val drainLv = skills.getLevel("life_drain")
+            if (drainLv > 0) {
+                val healAmount = event.finalDamage * (drainLv * 0.1)
+                val newHealth = (damager.health + healAmount).coerceAtMost(damager.maxHealth)
+                damager.health = newHealth
+                damager.playSound(damager.location, Sound.ENTITY_WITCH_DRINK, 0.8f, 1.2f)
+                damager.world.spawnParticle(
+                    Particle.HEART,
+                    damager.location.add(0.0, 1.5, 0.0),
+                    drainLv, 0.3, 0.3, 0.3, 0.0
+                )
+            }
+        }
+
+        // ── Warrior combat skills ──────────────────────────────────────────
+        if (job == Jobs.WARRIOR) {
+            var damage = event.damage
+
+            // Sword Mastery: bonus damage with sword
+            if (heldItem.type in SWORD_MATERIALS) {
+                val swordLv = skills.getLevel("sword_mastery")
+                if (swordLv > 0) {
+                    damage *= (1.0 + swordLv * 0.1)
+                }
+            }
+
+            // Berserker: bonus damage when below 50% HP
+            val berserkerLv = skills.getLevel("berserker")
+            if (berserkerLv > 0 && damager.health < damager.maxHealth * 0.5) {
+                val bonusMultiplier = when (berserkerLv) {
+                    1 -> 0.15
+                    2 -> 0.25
+                    else -> 0.35
+                }
+                damage *= (1.0 + bonusMultiplier)
+            }
+
+            // Critical Strike: chance for 1.5x damage
+            val critLv = skills.getLevel("critical_strike")
+            if (critLv > 0) {
+                val critChance = critLv * 0.10
+                if (Math.random() < critChance) {
+                    damage *= 1.5
+                    damager.sendActionBar(legacy.deserialize("§c§l치명타!"))
+                }
+            }
+
+            event.damage = damage
+
+            // War Cry: sneak + attack → Weakness to nearby hostiles
+            val warCryLv = skills.getLevel("war_cry")
+            if (warCryLv > 0 && damager.isSneaking) {
+                val now = System.currentTimeMillis()
+                val lastUse = warCryCooldown[uuid] ?: 0L
+                if (now - lastUse >= 30_000L) {
+                    warCryCooldown[uuid] = now
+                    val durationTicks = warCryLv * 40 + 20
+                    val nearbyHostiles = damager.world.getNearbyEntities(
+                        damager.location, 8.0, 8.0, 8.0
+                    ) { it is Monster && it != damager }.filterIsInstance<LivingEntity>()
+
+                    for (mob in nearbyHostiles) {
+                        mob.addPotionEffect(PotionEffect(
+                            PotionEffectType.WEAKNESS,
+                            durationTicks,
+                            0,
+                            false, true, true
+                        ))
+                    }
+                    damager.playSound(damager.location, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f)
+                    damager.sendActionBar(legacy.deserialize("§c§l전투의 함성! §7주변 적에게 약화 적용"))
+                }
+            }
+        }
+    }
+
+    // ── Miner: Mace Master Lv3 — cancel fall damage ─────────────────────
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onFallDamage(event: EntityDamageEvent) {
+        if (event.cause != EntityDamageEvent.DamageCause.FALL) return
+        val player = event.entity as? Player ?: return
+        val skills = skillManager.getSkills(player.uniqueId)
+        if (skills.getLevel("mace_master") >= 3) {
+            event.isCancelled = true
+        }
+    }
+
+    // ── Warrior XP: killing a hostile mob ──────────────────────────────
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onEntityDeath(event: EntityDeathEvent) {
+        if (event.entity !is Monster) return
+        val killer = event.entity.killer ?: return
+        val uuid = killer.uniqueId
+        if (plugin.dataManager.getPlayer(uuid)?.job != Jobs.WARRIOR) return
+
+        val result = plugin.dataManager.grantXp(uuid, 10)
+        if (result != null) {
+            plugin.actionBarManager.updateXp(uuid, result.level, result.xp)
+            if (result.leveledUp) {
+                dev.nyaru.minecraft.util.triggerLevelUp(plugin, killer, result.level, result.newSkillPoints)
+            }
+        }
+    }
+}

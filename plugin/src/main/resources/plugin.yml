@@ -1,0 +1,46 @@
+name: NyaruPlugin
+version: "${pluginVersion}"
+main: dev.nyaru.minecraft.NyaruPlugin
+api-version: "1.21"
+authors: [Nyaru]
+description: "\uBC29\uC6B8\uB0E5 \uC11C\uBC84 Minecraft integration"
+soft-depend: [FancyNpcs]
+commands:
+  연동:
+    description: Discord 계정 연동 코드 발급
+    usage: /연동
+  잔고:
+    description: 냥 잔고 확인
+    usage: /잔고
+  직업:
+    description: 직업 정보 확인
+    usage: /직업
+  연동해제:
+    description: Discord 계정 연동 해제
+    usage: /연동해제
+  나루관리:
+    description: 방울냥 관리자 명령어
+    usage: /나루관리 <npc|상점|지급> ...
+    permission: nyaru.admin
+  스킬:
+    description: 스킬 확인 및 업그레이드
+    usage: /스킬
+  팀:
+    description: 팀 관리 (블럭 보호 공유)
+    usage: /팀 <추가|제거|목록>
+  도움말:
+    description: 명령어 도움말 GUI
+    usage: /도움말
+  보호:
+    description: 블럭 보호 모드 ON/OFF 토글
+    usage: /보호
+  로그:
+    description: 블럭 로그 조사 모드 토글 (좌클릭으로 블럭 기록 조회)
+    usage: /로그
+    permission: nyaru.admin
+  스폰:
+    description: 스폰으로 귀환 (1000냥, 3초 카운트다운)
+    usage: /스폰
+  집:
+    description: 집 설정/이동/삭제
+    usage: /집 <설정|가기|삭제>

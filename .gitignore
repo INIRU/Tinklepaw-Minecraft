@@ -1,0 +1,10 @@
+node_modules/
+.gradle/
+build/
+*.jar
+mc-data/
+.env
+.omc/
+.claude/
+target/
+launcher/src-tauri/target/

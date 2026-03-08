@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "nyaru-hud",
+  "version": "${version}",
+  "name": "Nyaru HUD",
+  "description": "방울냥 서버 커스텀 HUD",
+  "authors": ["Nyaru"],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.nyaru.hud.NyaruHudClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "fabric-api": "*",
+    "minecraft": "~1.21.11"
+  }
+}

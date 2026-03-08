@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegoodthings/nicegoodthings.github.io/main/tauri-plugin-schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for the Nyaru launcher",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "store:default",
+    "updater:default"
+  ]
+}

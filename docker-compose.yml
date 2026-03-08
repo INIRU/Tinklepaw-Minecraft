@@ -1,0 +1,28 @@
+services:
+  minecraft:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    tty: true
+    stdin_open: true
+    ports:
+      - "25565:25565"
+      - "25575:25575"
+    environment:
+      JAVA_OPTS: "-Djava.net.preferIPv4Stack=true"
+      EULA: "TRUE"
+      TYPE: "PAPER"
+      VERSION: "1.21.11"
+      MEMORY: "8G"
+      # nyaru-plugin은 Dockerfile 빌드 시 포함됨 (/local-plugin → /data/plugins)
+      PLUGINS: "https://cdn.modrinth.com/data/EeyAn23L/versions/8AIsBJk2/FancyNpcs-2.9.2.338.jar"
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: "${MINECRAFT_RCON_PASSWORD}"
+      RCON_PORT: "25575"
+      MINECRAFT_API_KEY: "${MINECRAFT_API_KEY}"
+    volumes:
+      - mc-data:/data
+    restart: unless-stopped
+
+volumes:
+  mc-data:
