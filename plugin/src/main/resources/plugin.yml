@@ -44,3 +44,9 @@ commands:
   집:
     description: 집 설정/이동/삭제
     usage: /집 <설정|가기|삭제>
+  교환:
+    description: 플레이어 간 아이템 교환
+    usage: /교환 <플레이어|수락|거절>
+  배낭:
+    description: 개인 배낭 (추가 보관함)
+    usage: /배낭 [업그레이드]

@@ -15,11 +15,15 @@ import dev.nyaru.minecraft.commands.TeamCommand
 import dev.nyaru.minecraft.commands.UnlinkCommand
 import dev.nyaru.minecraft.data.DataManager
 import dev.nyaru.minecraft.data.ShopManager
+import dev.nyaru.minecraft.commands.BackpackCommand
+import dev.nyaru.minecraft.commands.TradeCommand
+import dev.nyaru.minecraft.gui.BackpackGui
 import dev.nyaru.minecraft.gui.EnhanceGui
 import dev.nyaru.minecraft.gui.HelpGui
 import dev.nyaru.minecraft.gui.JobSelectGui
 import dev.nyaru.minecraft.gui.ShopGui
 import dev.nyaru.minecraft.gui.SkillGui
+import dev.nyaru.minecraft.gui.TradeGui
 import dev.nyaru.minecraft.listeners.ActionBarManager
 import dev.nyaru.minecraft.listeners.BlockBreakListener
 import dev.nyaru.minecraft.listeners.BlockDropListener
@@ -31,9 +35,13 @@ import dev.nyaru.minecraft.listeners.FishingListener
 import dev.nyaru.minecraft.listeners.PlayerJoinListener
 import dev.nyaru.minecraft.listeners.ProtectionListener
 import dev.nyaru.minecraft.listeners.SidebarManager
+import dev.nyaru.minecraft.listeners.NecromancerListener
+import dev.nyaru.minecraft.listeners.SoulboundListener
 import dev.nyaru.minecraft.listeners.SmeltListener
 import dev.nyaru.minecraft.listeners.WorldEventListener
+import dev.nyaru.minecraft.skills.MinionManager
 import dev.nyaru.minecraft.logging.BlockLogger
+import dev.nyaru.minecraft.world.StructureResetManager
 import dev.nyaru.minecraft.npc.NpcType
 import dev.nyaru.minecraft.protection.ProtectionManager
 import dev.nyaru.minecraft.skills.SkillManager
@@ -72,6 +80,12 @@ class NyaruPlugin : JavaPlugin() {
     lateinit var skillManager: SkillManager
         private set
 
+    lateinit var minionManager: MinionManager
+        private set
+
+    lateinit var structureResetManager: StructureResetManager
+        private set
+
     val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onEnable() {
@@ -104,6 +118,10 @@ class NyaruPlugin : JavaPlugin() {
         server.pluginManager.registerEvents(HelpGui.HelpGuiListener(), this)
 
         skillManager = SkillManager(this)
+        skillManager.startForestBlessingCheck()
+        minionManager = MinionManager(this)
+        minionManager.startMinionTask()
+        server.pluginManager.registerEvents(NecromancerListener(this), this)
         sidebarManager = SidebarManager(this, protectionManager)
         server.pluginManager.registerEvents(sidebarManager, this)
         actionBarManager = ActionBarManager(this, protectionManager)
@@ -117,6 +135,12 @@ class NyaruPlugin : JavaPlugin() {
         server.pluginManager.registerEvents(ShopGui.ShopGuiListener(this), this)
         server.pluginManager.registerEvents(SkillGui.SkillGuiListener(this), this)
         server.pluginManager.registerEvents(EnhanceGui.EnhanceGuiListener(this), this)
+        server.pluginManager.registerEvents(TradeGui.TradeGuiListener(this), this)
+        server.pluginManager.registerEvents(BackpackGui.BackpackGuiListener(this), this)
+        server.pluginManager.registerEvents(SoulboundListener(), this)
+
+        structureResetManager = StructureResetManager(this)
+        server.pluginManager.registerEvents(structureResetManager, this)
         server.pluginManager.registerEvents(BlockBreakListener(this, skillManager), this)
         server.pluginManager.registerEvents(BlockDropListener(this, skillManager), this)
         server.pluginManager.registerEvents(BlockPlaceListener(this, skillManager), this)
@@ -171,6 +195,12 @@ class NyaruPlugin : JavaPlugin() {
         getCommand("보호")?.setExecutor(ProtectCommand(protectionManager))
         getCommand("스폰")?.setExecutor(SpawnCommand(this))
         getCommand("집")?.setExecutor(HomeCommand(this))
+        val tradeCmd = TradeCommand(this)
+        getCommand("교환")?.setExecutor(tradeCmd)
+        getCommand("교환")?.tabCompleter = tradeCmd
+        val backpackCmd = BackpackCommand(this)
+        getCommand("배낭")?.setExecutor(backpackCmd)
+        getCommand("배낭")?.tabCompleter = backpackCmd
 
         logger.info("NyaruPlugin 활성화 완료!")
     }
@@ -180,6 +210,11 @@ class NyaruPlugin : JavaPlugin() {
 
     override fun onDisable() {
         pluginScope.cancel()
+        if (::minionManager.isInitialized) {
+            for (uuid in server.onlinePlayers.map { it.uniqueId }) {
+                minionManager.removeMinions(uuid)
+            }
+        }
         if (::dataManager.isInitialized) dataManager.saveAll()
         if (::protectionManager.isInitialized) protectionManager.save()
         if (::blockLogger.isInitialized) blockLogger.shutdown()

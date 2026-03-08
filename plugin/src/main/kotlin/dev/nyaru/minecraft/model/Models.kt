@@ -78,8 +78,9 @@ object Jobs {
     const val WARRIOR = "warrior"
     const val FISHER = "fisher"
     const val WOODCUTTER = "woodcutter"
+    const val NECROMANCER = "necromancer"
 
-    val ALL = listOf(MINER, FARMER, WARRIOR, FISHER, WOODCUTTER)
+    val ALL = listOf(MINER, FARMER, WARRIOR, FISHER, WOODCUTTER, NECROMANCER)
 
     fun displayName(job: String?): String = when (job) {
         MINER -> "광부"
@@ -87,6 +88,7 @@ object Jobs {
         WARRIOR -> "전사"
         FISHER -> "어부"
         WOODCUTTER -> "벌목꾼"
+        NECROMANCER -> "네크로맨서"
         else -> "없음"
     }
 
@@ -96,6 +98,7 @@ object Jobs {
         WARRIOR -> "§c"
         FISHER -> "§3"
         WOODCUTTER -> "§6"
+        NECROMANCER -> "§5"
         else -> "§7"
     }
 }
@@ -156,6 +159,12 @@ object SkillRegistry {
         SkillDef("war_cry", "§c📯 전투의 함성", "warrior", 3, listOf(7, 12, 20),
             listOf("§7웅크리기+공격 시 주변 적에게 약화.", "§7Lv1: 3초 / Lv2: 5초 / Lv3: 7초"),
             "GOAT_HORN"),
+        SkillDef("iron_will", "§c🛡 강철 의지", "warrior", 3, listOf(8, 14, 20),
+            listOf("§7치명적 피해 시 HP 1로 생존합니다.", "§7Lv1: 10% / Lv2: 20% / Lv3: 30%", "§7쿨다운: 3분"),
+            "TOTEM_OF_UNDYING"),
+        SkillDef("lethal_strike", "§c☠ 치명적 일격", "warrior", 3, listOf(6, 11, 18),
+            listOf("§7공격 시 적에게 위더 효과를 부여합니다.", "§7Lv1: 10%, 3초 / Lv2: 15%, 5초 / Lv3: 20%, 7초"),
+            "WITHER_SKELETON_SKULL"),
 
         // === Fisher ===
         SkillDef("lucky_catch", "§3🎣 행운의 낚시", "fisher", 3, listOf(1, 5, 10),
@@ -177,7 +186,27 @@ object SkillRegistry {
             "IRON_AXE"),
         SkillDef("leaf_blower", "§6🍃 잎 날리기", "woodcutter", 1, listOf(10),
             listOf("§7나무를 벨 때 잎도 함께 파괴됩니다."),
-            "OAK_LEAVES")
+            "OAK_LEAVES"),
+        SkillDef("forest_blessing", "§6🌿 숲의 축복", "woodcutter", 3, listOf(3, 8, 15),
+            listOf("§7나무 근처에서 재생 효과를 받습니다.", "§7Lv1: Regeneration I / Lv2: II / Lv3: III"),
+            "OAK_SAPLING"),
+
+        // === Necromancer ===
+        SkillDef("summon_undead", "§5☠ 언데드 소환", "necromancer", 3, listOf(1, 5, 10),
+            listOf("§7좀비 미니언을 소환합니다.", "§7Lv1: 1마리 / Lv2: 2마리 / Lv3: 3마리"),
+            "ZOMBIE_HEAD"),
+        SkillDef("skeleton_archer", "§5🏹 해골 궁수", "necromancer", 3, listOf(3, 8, 15),
+            listOf("§7스켈레톤 미니언을 소환합니다.", "§7Lv1: 1마리 / Lv2: 2마리 / Lv3: 3마리"),
+            "SKELETON_SKULL"),
+        SkillDef("life_siphon", "§5❤ 생명 착취", "necromancer", 3, listOf(5, 10, 18),
+            listOf("§7미니언이 공격 시 주인 체력을 회복합니다.", "§7Lv1: 5% / Lv2: 10% / Lv3: 15%"),
+            "GHAST_TEAR"),
+        SkillDef("dark_aura", "§5🌑 암흑 오라", "necromancer", 3, listOf(7, 12, 20),
+            listOf("§7주변 적에게 슬로우+어둠 효과를 줍니다.", "§7Lv1: 3초 / Lv2: 5초 / Lv3: 7초", "§7범위: 8블록, 쿨다운: 15초"),
+            "WITHER_ROSE"),
+        SkillDef("soul_empower", "§5💀 영혼 강화", "necromancer", 3, listOf(4, 9, 16),
+            listOf("§7미니언의 체력과 공격력을 강화합니다.", "§7Lv1: +25% / Lv2: +50% / Lv3: +100%"),
+            "SOUL_LANTERN")
     )
 
     fun forJob(job: String): List<SkillDef> = ALL.filter { it.job == job }

@@ -30,7 +30,7 @@ class SkillGui(
         val activeInventories = ConcurrentHashMap<Inventory, SkillGui>()
 
         // Skill slots for up to 5 skills per job
-        val SKILL_SLOTS = listOf(19, 21, 23, 25, 28)
+        val SKILL_SLOTS = listOf(19, 21, 23, 25, 29, 31)
 
         // Background glass per job
         fun bgGlassMaterial(job: String?): Material = when (job) {
@@ -39,6 +39,7 @@ class SkillGui(
             Jobs.WARRIOR -> Material.RED_STAINED_GLASS_PANE
             Jobs.FISHER -> Material.CYAN_STAINED_GLASS_PANE
             Jobs.WOODCUTTER -> Material.ORANGE_STAINED_GLASS_PANE
+            Jobs.NECROMANCER -> Material.PURPLE_STAINED_GLASS_PANE
             else -> Material.GRAY_STAINED_GLASS_PANE
         }
 
@@ -49,6 +50,7 @@ class SkillGui(
             Jobs.WARRIOR -> Material.PINK_STAINED_GLASS_PANE
             Jobs.FISHER -> Material.LIGHT_BLUE_STAINED_GLASS_PANE
             Jobs.WOODCUTTER -> Material.YELLOW_STAINED_GLASS_PANE
+            Jobs.NECROMANCER -> Material.MAGENTA_STAINED_GLASS_PANE
             else -> Material.WHITE_STAINED_GLASS_PANE
         }
 
@@ -58,6 +60,7 @@ class SkillGui(
             Jobs.WARRIOR -> "§c§l⚔ 전사 스킬"
             Jobs.FISHER -> "§3§l🎣 어부 스킬"
             Jobs.WOODCUTTER -> "§6§l🪓 벌목꾼 스킬"
+            Jobs.NECROMANCER -> "§5§l☠ 네크로맨서 스킬"
             else -> "§7스킬"
         }
     }

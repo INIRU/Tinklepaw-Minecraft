@@ -205,7 +205,7 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 val tool = player.inventory.itemInMainHand
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     try {
-                        breakConnectedLogs(event.block, blockType, leafBlowerLevel >= 1, tool)
+                        breakConnectedLogs(event.block, blockType, leafBlowerLevel >= 1, tool, uuid.toString())
                     } finally {
                         timberActive.remove(uuid)
                     }
@@ -261,8 +261,10 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
         origin: org.bukkit.block.Block,
         logType: Material,
         breakLeaves: Boolean,
-        tool: ItemStack
+        tool: ItemStack,
+        playerUuid: String
     ) {
+        val pm = plugin.protectionManager
         val visited = mutableSetOf<org.bukkit.block.Block>()
         val queue = LinkedList<org.bukkit.block.Block>()
         queue.add(origin)
@@ -279,6 +281,11 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
             for ((dx, dy, dz) in offsets) {
                 val neighbor = current.getRelative(dx, dy, dz)
                 if (neighbor in visited) continue
+                // Skip protected blocks — don't chain through them
+                if (pm.isProtected(neighbor.location) && !pm.canAccess(neighbor.location, playerUuid)) {
+                    visited.add(neighbor)
+                    continue
+                }
                 if (neighbor.type == logType) {
                     visited.add(neighbor)
                     queue.add(neighbor)

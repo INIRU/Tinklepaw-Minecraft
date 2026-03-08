@@ -21,6 +21,7 @@ import kotlin.math.ceil
 import kotlin.random.Random
 
 private val ENHANCE_LEVEL_KEY = NamespacedKey("nyaru", "enhance_level")
+val SOULBOUND_KEY = NamespacedKey("nyaru", "soulbound")
 
 class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
@@ -29,8 +30,10 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
         const val TOOL_SLOT = 22
         const val ENHANCE_BUTTON_SLOT = 31
+        const val SOULBOUND_BUTTON_SLOT = 40
         const val INFO_SLOT = 4
         const val INV_SIZE = 54
+        const val SOULBOUND_COST = 50000
 
         val VALID_TOOLS = setOf(
             Material.WOODEN_PICKAXE, Material.STONE_PICKAXE, Material.IRON_PICKAXE,
@@ -90,7 +93,7 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
                 legacy.deserialize("§7강화 버튼을 클릭하면 강화가 진행됩니다."),
                 Component.empty(),
                 legacy.deserialize("§a성공(50%): §f+1 ~ +3 강화"),
-                legacy.deserialize("§c실패(50%): §f-1 ~ -3 강화"),
+                legacy.deserialize("§c실패(50%): §f-0 ~ -2 강화"),
                 legacy.deserialize("§7강화 수치는 최소 §f+0§7, 최대 §f+10"),
                 Component.empty(),
                 legacy.deserialize("§7강화 비용: §e(현재 강화 + 1) × 500냥")
@@ -100,24 +103,105 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
         // Slot 31: Enhance button (recalculated when tool is placed)
         updateEnhanceButton()
+        updateSoulboundButton()
     }
 
     private fun updateEnhanceButton() {
         val toolItem = inventory.getItem(TOOL_SLOT)
         val currentLevel = toolItem?.itemMeta?.persistentDataContainer
             ?.get(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER) ?: 0
-        val cost = (currentLevel + 1) * 500
 
         val button = ItemStack(Material.ANVIL)
         button.editMeta { meta ->
-            meta.displayName(legacy.deserialize("§d§l⚒ 강화하기"))
-            meta.lore(listOf(
-                legacy.deserialize("§7비용: §e${cost}냥"),
-                legacy.deserialize("§7현재 강화: §f+${currentLevel}"),
-                legacy.deserialize("§7결과: §a+1~3 §7또는 §c-1~3")
-            ))
+            if (currentLevel >= 10) {
+                meta.displayName(legacy.deserialize("§6§l⚒ 최대 강화 달성!"))
+                meta.lore(listOf(
+                    legacy.deserialize("§7현재 강화: §6+${currentLevel}"),
+                    legacy.deserialize("§c더 이상 강화할 수 없습니다.")
+                ))
+            } else {
+                val cost = (currentLevel + 1) * 500
+                meta.displayName(legacy.deserialize("§d§l⚒ 강화하기"))
+                meta.lore(listOf(
+                    legacy.deserialize("§7비용: §e${cost}냥"),
+                    legacy.deserialize("§7현재 강화: §f+${currentLevel}"),
+                    legacy.deserialize("§7결과: §a+1~3 §7또는 §c-0~2")
+                ))
+            }
         }
         inventory.setItem(ENHANCE_BUTTON_SLOT, button)
+    }
+
+    private fun updateSoulboundButton() {
+        val toolItem = inventory.getItem(TOOL_SLOT)
+        val isSoulbound = toolItem?.itemMeta?.persistentDataContainer
+            ?.has(SOULBOUND_KEY) == true
+
+        val button = ItemStack(if (isSoulbound) Material.NETHER_STAR else Material.ENDER_EYE)
+        button.editMeta { meta ->
+            if (isSoulbound) {
+                meta.displayName(legacy.deserialize("§d§l✦ 소울바운드 적용됨"))
+                meta.lore(listOf(
+                    legacy.deserialize("§7이 아이템은 사망 시 유지됩니다."),
+                    legacy.deserialize("§a이미 소울바운드 상태입니다.")
+                ))
+            } else {
+                meta.displayName(legacy.deserialize("§d§l✦ 소울바운드 부여"))
+                meta.lore(listOf(
+                    legacy.deserialize("§7사망 시 이 아이템을 잃지 않습니다."),
+                    legacy.deserialize("§7비용: §e50,000냥"),
+                    Component.empty(),
+                    legacy.deserialize("§e▶ 클릭하여 소울바운드 부여")
+                ))
+            }
+        }
+        inventory.setItem(SOULBOUND_BUTTON_SLOT, button)
+    }
+
+    private fun performSoulbound() {
+        val toolItem = inventory.getItem(TOOL_SLOT)
+        if (toolItem == null || toolItem.type == Material.AIR) {
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+            player.sendMessage("§c아이템을 슬롯에 올려두세요.")
+            return
+        }
+
+        val meta = toolItem.itemMeta
+        if (meta.persistentDataContainer.has(SOULBOUND_KEY)) {
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+            player.sendMessage("§c이미 소울바운드 상태입니다.")
+            return
+        }
+
+        if (!plugin.dataManager.hasBalance(player.uniqueId, SOULBOUND_COST)) {
+            val balance = plugin.dataManager.getBalance(player.uniqueId)
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+            player.sendMessage("§c냥이 부족합니다. (보유: §e${balance}냥 §c/ 필요: §e50,000냥§c)")
+            return
+        }
+
+        plugin.dataManager.spendBalance(player.uniqueId, SOULBOUND_COST)
+        plugin.actionBarManager.refresh(player.uniqueId)
+        plugin.dataManager.save(player.uniqueId)
+
+        // Apply soulbound tag
+        meta.persistentDataContainer.set(SOULBOUND_KEY, PersistentDataType.BYTE, 1)
+
+        // Add soulbound lore
+        val existingLore = meta.lore()?.toMutableList() ?: mutableListOf()
+        val soulboundLine = legacy.deserialize("§d✦ 소울바운드 §7(사망 시 유지)")
+        val soulboundPattern = "소울바운드"
+        if (existingLore.none { legacy.serialize(it).contains(soulboundPattern) }) {
+            existingLore.add(soulboundLine)
+        }
+        meta.lore(existingLore)
+
+        toolItem.itemMeta = meta
+        inventory.setItem(TOOL_SLOT, toolItem)
+
+        updateSoulboundButton()
+        player.playSound(player.location, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 1.2f)
+        player.sendMessage("§d§l✦ 소울바운드 부여 완료! §7이 아이템은 사망 시 유지됩니다. §e(50,000냥 차감)")
     }
 
     fun handleClick(event: InventoryClickEvent) {
@@ -125,14 +209,14 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
         // Allow clicks in the player's own inventory (pickup/place items)
         if (slot >= INV_SIZE) {
-            Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton() })
+            Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton(); updateSoulboundButton() })
             return
         }
 
         // Allow the tool slot to receive items
         if (slot == TOOL_SLOT) {
             event.isCancelled = false
-            Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton() })
+            Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton(); updateSoulboundButton() })
             return
         }
 
@@ -140,6 +224,8 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
         if (slot == ENHANCE_BUTTON_SLOT) {
             performEnhance()
+        } else if (slot == SOULBOUND_BUTTON_SLOT) {
+            performSoulbound()
         }
     }
 
@@ -159,6 +245,13 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
         val meta = toolItem.itemMeta
         val currentLevel = meta.persistentDataContainer.get(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER) ?: 0
+
+        if (currentLevel >= 10) {
+            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+            player.sendMessage("§c이미 최대 강화(+10)입니다.")
+            return
+        }
+
         val cost = (currentLevel + 1) * 500
 
         if (!plugin.dataManager.hasBalance(player.uniqueId, cost)) {
@@ -174,7 +267,7 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
         // 50% success, 50% fail
         val success = Random.nextBoolean()
-        val change = if (success) Random.nextInt(1, 4) else -Random.nextInt(1, 4)
+        val change = if (success) Random.nextInt(1, 4) else -Random.nextInt(0, 3)
         val newLevel = (currentLevel + change).coerceIn(0, 10)
 
         // Apply new level to item

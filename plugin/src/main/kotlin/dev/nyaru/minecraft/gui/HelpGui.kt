@@ -28,40 +28,25 @@ private val ENTRIES = listOf(
         "/연동",
         listOf("Discord ID를 입력하면 OTP 코드 발급", "Discord에서 /연동확인 <코드> 입력")
     ),
-    HelpEntry("/연동해제", Material.BARRIER,
-        "Discord 연동 해제",
-        "/연동해제",
-        listOf("해제 후 재연동 가능")
-    ),
     HelpEntry("/잔고", Material.GOLD_NUGGET,
         "포인트 잔고 확인",
         "/잔고",
         listOf("채굴·수확·판매로 포인트 획득")
     ),
     HelpEntry("/직업", Material.IRON_PICKAXE,
-        "직업 정보 및 레벨 확인",
+        "직업 슬롯 관리",
         "/직업",
-        listOf("직업 NPC에서 광부/농부 선택", "레벨업 시 스킬 포인트 +1")
+        listOf("최대 3개 슬롯 (추가 구매 5,000냥)", "슬롯 전환 1일 1회 무료, 추가 10,000냥", "직업 변경 5,000냥")
     ),
     HelpEntry("/스킬", Material.ENCHANTED_BOOK,
         "스킬 확인 및 업그레이드",
         "/스킬",
         listOf("직업별 전용 스킬 존재", "레벨 조건 충족 시 해금")
     ),
-    HelpEntry("/시세", Material.EMERALD,
-        "현재 아이템 시세 확인",
-        "/시세",
-        listOf("가격은 시장 상황에 따라 변동", "신선도·순정도로 추가 보너스")
-    ),
-    HelpEntry("/퀘스트", Material.MAP,
-        "오늘의 일일 퀘스트",
-        "/퀘스트",
-        listOf("매일 초기화", "완료 시 보상 포인트 지급")
-    ),
-    HelpEntry("/거래소", Material.CHEST,
-        "P2P 플레이어 거래소",
-        "/거래소",
-        listOf("다른 플레이어의 리스팅 구매", "내 아이템 판매 등록 가능")
+    HelpEntry("/교환", Material.CHEST,
+        "플레이어 간 아이템 교환",
+        "/교환 <플레이어>",
+        listOf("상대방에게 교환 요청 전송", "양쪽 모두 확인해야 교환 성사", "/교환 수락 · /교환 거절")
     ),
     HelpEntry("/팀", Material.CYAN_WOOL,
         "팀 관리 (블럭 보호 공유)",
@@ -73,10 +58,25 @@ private val ENTRIES = listOf(
         "/보호",
         listOf("ON 상태에서 설치한 블럭만 보호됨", "액션바에 🔒/🔓 상태 표시")
     ),
-    HelpEntry("/로그", Material.WRITABLE_BOOK,
-        "블럭 로그 조사 모드 (관리자)",
-        "/로그",
-        listOf("ON 후 블럭 좌클릭 → 해당 블럭 기록 조회", "관리자 전용")
+    HelpEntry("/스폰", Material.COMPASS,
+        "스폰으로 귀환",
+        "/스폰",
+        listOf("1,000냥 비용", "3초 카운트다운 (이동 시 취소)")
+    ),
+    HelpEntry("/집", Material.RED_BED,
+        "집 설정/이동/삭제",
+        "/집 <설정|가기|삭제>",
+        listOf("설정 1,000냥 / 이동 500냥", "3초 카운트다운 (이동 시 취소)")
+    ),
+    HelpEntry("/배낭", Material.CHEST,
+        "개인 배낭 (추가 보관함)",
+        "/배낭 [업그레이드]",
+        listOf("개방: 10,000냥 (27칸)", "업그레이드: 30,000냥 (54칸)", "사망 시 배낭 아이템 유지")
+    ),
+    HelpEntry("/도움말", Material.BOOK,
+        "명령어 도움말 GUI",
+        "/도움말",
+        listOf("현재 보고 있는 화면입니다.")
     ),
 )
 
@@ -98,7 +98,7 @@ class HelpGui(private val player: Player) {
         for (i in 0 until 54) inv.setItem(i, glass)
 
         // Command items — rows 1-2, starting slot 10
-        val slots = listOf(10, 12, 14, 16, 20, 22, 24, 26, 31, 40)
+        val slots = listOf(10, 12, 14, 16, 19, 21, 23, 25, 37, 39, 41)
         ENTRIES.forEachIndexed { i, entry ->
             val slot = slots.getOrNull(i) ?: return@forEachIndexed
             val item = ItemStack(entry.material)

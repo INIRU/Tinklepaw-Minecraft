@@ -5,6 +5,7 @@ import dev.nyaru.minecraft.model.ShopItem
 import dev.nyaru.minecraft.npc.NpcType
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
+import org.bukkit.World
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
@@ -28,7 +29,8 @@ class AdminCommand(
             "차감" -> handleDeduct(sender, args)
             "설정" -> handleSet(sender, args)
             "레벨" -> handleLevel(sender, args)
-            else -> sender.sendMessage("§f/나루관리 <npc|상점|지급|차감|설정|레벨>")
+            "구조물초기화" -> handleStructureReset(sender, args)
+            else -> sender.sendMessage("§f/나루관리 <npc|상점|지급|차감|설정|레벨|구조물초기화>")
         }
         return true
     }
@@ -188,13 +190,57 @@ class AdminCommand(
         }
     }
 
+    private fun handleStructureReset(sender: CommandSender, args: Array<out String>) {
+        val target = args.getOrNull(1)?.lowercase()
+        val environment = when (target) {
+            "nether", "네더" -> World.Environment.NETHER
+            "end", "엔드" -> World.Environment.THE_END
+            "all", "전체", null -> null
+            "스캔" -> {
+                val found = plugin.structureResetManager.scanForLootChests()
+                sender.sendMessage("§a스캔 완료: ${found}개의 새로운 전리품 위치를 발견했습니다.")
+                sender.sendMessage("§7${plugin.structureResetManager.getStats()}")
+                return
+            }
+            "상태" -> {
+                sender.sendMessage("§6§l구조물 초기화 상태")
+                sender.sendMessage("§7${plugin.structureResetManager.getStats()}")
+                return
+            }
+            else -> {
+                sender.sendMessage("§c사용법: /나루관리 구조물초기화 [nether|end|all|스캔|상태]")
+                return
+            }
+        }
+
+        val envName = when (environment) {
+            World.Environment.NETHER -> "네더"
+            World.Environment.THE_END -> "엔드"
+            else -> "전체"
+        }
+        sender.sendMessage("§e${envName} 구조물 전리품 초기화 중...")
+
+        val count = plugin.structureResetManager.resetLoot(environment)
+        sender.sendMessage("§a§l✓ 초기화 완료! §f${count}개§a의 전리품이 리셋되었습니다.")
+
+        if (count > 0) {
+            Bukkit.broadcast(
+                net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
+                    .legacySection().deserialize(
+                        "§6§l[서버] §e${envName} 구조물 전리품이 초기화되었습니다! §7(${count}개)"
+                    )
+            )
+        }
+    }
+
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
         if (!sender.hasPermission("nyaru.admin")) return emptyList()
         return when (args.size) {
-            1 -> listOf("npc", "상점", "지급", "차감", "설정", "레벨").filter { it.startsWith(args[0]) }
+            1 -> listOf("npc", "상점", "지급", "차감", "설정", "레벨", "구조물초기화").filter { it.startsWith(args[0]) }
             2 -> when (args[0].lowercase()) {
                 "npc" -> listOf("상점", "직업", "강화").filter { it.startsWith(args[1]) }
                 "상점" -> listOf("추가", "제거", "목록").filter { it.startsWith(args[1]) }
+                "구조물초기화" -> listOf("nether", "end", "all", "스캔", "상태").filter { it.startsWith(args[1]) }
                 "지급", "차감", "설정", "레벨" -> Bukkit.getOnlinePlayers().map { it.name }.filter { it.startsWith(args[1]) }
                 else -> emptyList()
             }

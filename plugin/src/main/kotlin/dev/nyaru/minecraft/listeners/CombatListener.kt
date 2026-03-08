@@ -42,6 +42,8 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
 
     // War cry cooldown: UUID -> timestamp (ms) of last use
     private val warCryCooldown = ConcurrentHashMap<UUID, Long>()
+    // Iron will cooldown: UUID -> timestamp (ms) of last proc
+    private val ironWillCooldown = ConcurrentHashMap<UUID, Long>()
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityDamageByEntity(event: EntityDamageByEntityEvent) {
@@ -134,6 +136,23 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
 
             event.damage = damage
 
+            // Lethal Strike: chance to apply Wither
+            val lethalLv = skills.getLevel("lethal_strike")
+            if (lethalLv > 0 && event.entity is LivingEntity) {
+                val chance = lethalLv * 0.05 + 0.05 // 10%, 15%, 20%
+                if (Math.random() < chance) {
+                    val duration = lethalLv * 40 + 20 // 3s, 5s, 7s
+                    (event.entity as LivingEntity).addPotionEffect(PotionEffect(
+                        PotionEffectType.WITHER,
+                        duration,
+                        0,
+                        false, true, true
+                    ))
+                    damager.sendActionBar(legacy.deserialize("§8§l☠ 치명적 일격!"))
+                    damager.playSound(damager.location, Sound.ENTITY_WITHER_HURT, 0.5f, 1.5f)
+                }
+            }
+
             // War Cry: sneak + attack → Weakness to nearby hostiles
             val warCryLv = skills.getLevel("war_cry")
             if (warCryLv > 0 && damager.isSneaking) {
@@ -162,14 +181,51 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
     }
 
     // ── Miner: Mace Master Lv3 — cancel fall damage ─────────────────────
+    // ── Warrior: Iron Will — survive lethal damage ────────────────────────
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    fun onFallDamage(event: EntityDamageEvent) {
-        if (event.cause != EntityDamageEvent.DamageCause.FALL) return
+    fun onPlayerDamage(event: EntityDamageEvent) {
         val player = event.entity as? Player ?: return
-        val skills = skillManager.getSkills(player.uniqueId)
-        if (skills.getLevel("mace_master") >= 3) {
-            event.isCancelled = true
+
+        // Mace Master Lv3: no fall damage
+        if (event.cause == EntityDamageEvent.DamageCause.FALL) {
+            val skills = skillManager.getSkills(player.uniqueId)
+            if (skills.getLevel("mace_master") >= 3) {
+                event.isCancelled = true
+                return
+            }
         }
+
+        // Iron Will: survive lethal damage
+        val job = plugin.dataManager.getPlayer(player.uniqueId)?.job
+        if (job != Jobs.WARRIOR) return
+
+        val skills = skillManager.getSkills(player.uniqueId)
+        val ironWillLv = skills.getLevel("iron_will")
+        if (ironWillLv <= 0) return
+
+        // Would this damage kill the player?
+        if (player.health - event.finalDamage > 0) return
+
+        // Cooldown check (3 minutes)
+        val now = System.currentTimeMillis()
+        val lastProc = ironWillCooldown[player.uniqueId] ?: 0L
+        if (now - lastProc < 180_000L) return
+
+        // Chance check: 10%, 20%, 30%
+        val chance = ironWillLv * 0.10
+        if (Math.random() >= chance) return
+
+        // Proc! Survive at 1 HP
+        ironWillCooldown[player.uniqueId] = now
+        event.isCancelled = true
+        player.health = 1.0
+        player.playSound(player.location, Sound.ITEM_TOTEM_USE, 1.0f, 1.0f)
+        player.world.spawnParticle(
+            Particle.TOTEM_OF_UNDYING,
+            player.location.add(0.0, 1.0, 0.0),
+            30, 0.5, 1.0, 0.5, 0.1
+        )
+        player.sendMessage(legacy.deserialize("§c§l강철 의지! §7치명적 피해를 버텨냈습니다! §8(쿨다운 3분)"))
     }
 
     // ── Warrior XP: killing a hostile mob ──────────────────────────────

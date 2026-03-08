@@ -5,6 +5,7 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import net.kyori.adventure.title.Title
 import org.bukkit.Color
 import org.bukkit.FireworkEffect
+import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.entity.EntityType
 import org.bukkit.entity.Firework
@@ -29,22 +30,13 @@ fun triggerLevelUp(plugin: NyaruPlugin, player: Player, newLevel: Int, newSkillP
 
     // Sounds
     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+    player.playSound(player.location, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.8f, 1.2f)
+    player.playSound(player.location, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, 0.6f, 1.0f)
 
-    // Firework at player feet
-    @Suppress("DEPRECATION")
-    val fw = player.world.spawnEntity(player.location.add(0.0, 3.0, 0.0), EntityType.FIREWORK_ROCKET) as Firework
-    val fwMeta = fw.fireworkMeta
-    fwMeta.addEffect(
-        FireworkEffect.builder()
-            .withColor(Color.YELLOW, Color.ORANGE)
-            .withFade(Color.WHITE)
-            .with(FireworkEffect.Type.BALL_LARGE)
-            .withTrail()
-            .build()
-    )
-    fwMeta.power = 0
-    fw.fireworkMeta = fwMeta
-    fw.detonate()
+    // Particle effects instead of real firework (no damage)
+    val loc = player.location.add(0.0, 1.5, 0.0)
+    player.world.spawnParticle(Particle.FIREWORK, loc, 40, 0.5, 0.8, 0.5, 0.1)
+    player.world.spawnParticle(Particle.TOTEM_OF_UNDYING, loc, 25, 0.4, 0.6, 0.4, 0.15)
 
     // Skill point notification
     if (newSkillPoints != null) {

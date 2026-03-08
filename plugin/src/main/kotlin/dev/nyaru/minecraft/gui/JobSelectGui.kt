@@ -119,6 +119,14 @@ class JobSelectGui(private val plugin: NyaruPlugin, private val player: Player) 
             "§8▸ §f잎 자동 파괴",
             "§8▸ §f도끼 채굴 속도 증가"
         )))
+        inv.setItem(33, buildJobItem(Material.WITHER_SKELETON_SKULL, "§5§l네크로맨서 (Necromancer)", listOf(
+            "§7미니언을 소환하여 전투합니다.",
+            Component.empty(),
+            "§e[ 보너스 ]",
+            "§8▸ §f좀비/스켈레톤 미니언 소환",
+            "§8▸ §f미니언의 공격으로 생명 흡수",
+            "§8▸ §f암흑 오라로 적 약화"
+        )))
 
         // Back button
         val back = ItemStack(Material.ARROW)
@@ -146,14 +154,17 @@ class JobSelectGui(private val plugin: NyaruPlugin, private val player: Player) 
             lore.add(Component.empty())
             if (isActive) {
                 lore.add(legacy.deserialize("§a§l✓ 현재 활성 슬롯"))
+                lore.add(Component.empty())
+                lore.add(legacy.deserialize("§e▶ 클릭하여 직업 변경 §7(5,000냥)"))
             } else {
                 val canSwitch = lastJobSwitch != java.time.LocalDate.now().toString()
                 if (canSwitch) {
-                    lore.add(legacy.deserialize("§e▶ 클릭하여 이 슬롯으로 전환"))
+                    lore.add(legacy.deserialize("§e좌클릭: §f슬롯 전환 §7(무료)"))
                 } else {
-                    lore.add(legacy.deserialize("§c⏳ 오늘은 슬롯 전환 불가"))
-                    lore.add(legacy.deserialize("§7내일 다시 전환할 수 있습니다."))
+                    lore.add(legacy.deserialize("§e좌클릭: §f슬롯 전환 §7(10,000냥)"))
+                    lore.add(legacy.deserialize("§8⏳ 쿨다운 중 — 비용 발생"))
                 }
+                lore.add(legacy.deserialize("§e우클릭: §f직업 변경 §7(5,000냥)"))
             }
             meta.lore(lore)
             if (isActive) {
@@ -221,6 +232,7 @@ class JobSelectGui(private val plugin: NyaruPlugin, private val player: Player) 
         Jobs.WARRIOR -> Material.DIAMOND_SWORD
         Jobs.FISHER -> Material.FISHING_ROD
         Jobs.WOODCUTTER -> Material.DIAMOND_AXE
+        Jobs.NECROMANCER -> Material.WITHER_SKELETON_SKULL
         else -> Material.BARRIER
     }
 
@@ -238,12 +250,12 @@ class JobSelectGui(private val plugin: NyaruPlugin, private val player: Player) 
             val slot = event.rawSlot
 
             when (state.mode) {
-                JobGuiState.Mode.SLOTS -> handleSlotViewClick(player, slot, event.inventory)
+                JobGuiState.Mode.SLOTS -> handleSlotViewClick(player, slot, event.inventory, event.isRightClick)
                 JobGuiState.Mode.JOB_SELECT -> handleJobSelectClick(player, slot, state.targetSlot, event.inventory)
             }
         }
 
-        private fun handleSlotViewClick(player: Player, slot: Int, inv: Inventory) {
+        private fun handleSlotViewClick(player: Player, slot: Int, inv: Inventory, isRightClick: Boolean) {
             val slotIndex = when (slot) {
                 11 -> 0
                 13 -> 1
@@ -273,27 +285,65 @@ class JobSelectGui(private val plugin: NyaruPlugin, private val player: Player) 
                     }
                 }
                 slotIndex < info.jobSlots.size && info.jobSlots[slotIndex].job.isNotEmpty() -> {
-                    // Switch to this slot
                     if (slotIndex == info.activeSlot) {
-                        player.sendMessage("§7이미 활성화된 슬롯입니다.")
-                        return
-                    }
-                    if (!plugin.dataManager.canSwitchJob(player.uniqueId)) {
-                        player.closeInventory()
-                        player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
-                        player.sendMessage("§c⏳ 오늘은 슬롯 전환이 불가합니다. 내일 다시 시도하세요.")
-                        return
-                    }
-                    player.closeInventory()
-                    val switched = plugin.dataManager.switchActiveSlot(player.uniqueId, slotIndex)
-                    if (switched) {
-                        player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
-                        val jobName = Jobs.displayName(info.jobSlots[slotIndex].job)
-                        player.sendMessage("§a§l✓ 슬롯 ${slotIndex + 1} (${jobName})으로 전환했습니다!")
+                        // Active slot: click to change job (5,000냥)
+                        val changeCost = 5000
+                        if (!plugin.dataManager.hasBalance(player.uniqueId, changeCost)) {
+                            val balance = plugin.dataManager.getBalance(player.uniqueId)
+                            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+                            player.sendMessage("§c냥이 부족합니다. (보유: §e${balance}냥 §c/ 필요: §e${changeCost}냥§c)")
+                            return
+                        }
+                        plugin.dataManager.spendBalance(player.uniqueId, changeCost)
                         plugin.actionBarManager.refresh(player.uniqueId)
-                        plugin.skillManager.refresh(player.uniqueId)
+                        player.closeInventory()
+                        player.sendMessage("§e직업 변경 비용 §f${changeCost}냥§e이 차감되었습니다.")
+                        JobSelectGui(plugin, player).openJobSelectView(slotIndex)
+                        return
+                    }
+
+                    if (isRightClick) {
+                        // Right click: change job on this slot (5,000냥)
+                        val changeCost = 5000
+                        if (!plugin.dataManager.hasBalance(player.uniqueId, changeCost)) {
+                            val balance = plugin.dataManager.getBalance(player.uniqueId)
+                            player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+                            player.sendMessage("§c냥이 부족합니다. (보유: §e${balance}냥 §c/ 필요: §e${changeCost}냥§c)")
+                            return
+                        }
+                        plugin.dataManager.spendBalance(player.uniqueId, changeCost)
+                        plugin.actionBarManager.refresh(player.uniqueId)
+                        player.closeInventory()
+                        player.sendMessage("§e직업 변경 비용 §f${changeCost}냥§e이 차감되었습니다.")
+                        JobSelectGui(plugin, player).openJobSelectView(slotIndex)
                     } else {
-                        player.sendMessage("§c슬롯 전환에 실패했습니다.")
+                        // Left click: switch to this slot
+                        val canSwitch = plugin.dataManager.canSwitchJob(player.uniqueId)
+                        if (!canSwitch) {
+                            // Cooldown active — pay 10,000냥 to skip
+                            val skipCost = 10000
+                            if (!plugin.dataManager.hasBalance(player.uniqueId, skipCost)) {
+                                val balance = plugin.dataManager.getBalance(player.uniqueId)
+                                player.closeInventory()
+                                player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
+                                player.sendMessage("§c쿨다운 중입니다. 스킵 비용: §e${skipCost}냥 §c(보유: §e${balance}냥§c)")
+                                return
+                            }
+                            plugin.dataManager.spendBalance(player.uniqueId, skipCost)
+                            plugin.actionBarManager.refresh(player.uniqueId)
+                            player.sendMessage("§e쿨다운 스킵 비용 §f${skipCost}냥§e이 차감되었습니다.")
+                        }
+                        player.closeInventory()
+                        val switched = plugin.dataManager.switchActiveSlot(player.uniqueId, slotIndex)
+                        if (switched) {
+                            player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f)
+                            val jobName = Jobs.displayName(info.jobSlots[slotIndex].job)
+                            player.sendMessage("§a§l✓ 슬롯 ${slotIndex + 1} (${jobName})으로 전환했습니다!")
+                            plugin.actionBarManager.refresh(player.uniqueId)
+                            plugin.skillManager.refresh(player.uniqueId)
+                        } else {
+                            player.sendMessage("§c슬롯 전환에 실패했습니다.")
+                        }
                     }
                 }
                 else -> {
@@ -318,6 +368,7 @@ class JobSelectGui(private val plugin: NyaruPlugin, private val player: Player) 
                 15 -> Jobs.WARRIOR
                 29 -> Jobs.FISHER
                 31 -> Jobs.WOODCUTTER
+                33 -> Jobs.NECROMANCER
                 else -> return
             }
 
