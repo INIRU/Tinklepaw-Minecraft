@@ -195,9 +195,9 @@ object SkillRegistry {
         SkillDef("summon_undead", "§5☠ 언데드 소환", "necromancer", 3, listOf(1, 5, 10),
             listOf("§7좀비 미니언을 소환합니다.", "§7Lv1: 1마리 / Lv2: 2마리 / Lv3: 3마리"),
             "ZOMBIE_HEAD"),
-        SkillDef("skeleton_archer", "§5🏹 해골 궁수", "necromancer", 3, listOf(3, 8, 15),
-            listOf("§7스켈레톤 미니언을 소환합니다.", "§7Lv1: 1마리 / Lv2: 2마리 / Lv3: 3마리"),
-            "SKELETON_SKULL"),
+        SkillDef("skeleton_archer", "§5⚔ 추가 소환", "necromancer", 3, listOf(3, 8, 15),
+            listOf("§7추가 좀비 미니언을 소환합니다.", "§7Lv1: +1마리 / Lv2: +2마리 / Lv3: +3마리"),
+            "ZOMBIE_HEAD"),
         SkillDef("life_siphon", "§5❤ 생명 착취", "necromancer", 3, listOf(5, 10, 18),
             listOf("§7미니언이 공격 시 주인 체력을 회복합니다.", "§7Lv1: 5% / Lv2: 10% / Lv3: 15%"),
             "GHAST_TEAR"),
@@ -208,7 +208,7 @@ object SkillRegistry {
             listOf("§7미니언의 체력, 공격력, 이동속도를 강화합니다.", "§7Lv1: +25%/+10%속도 / Lv2: +50%/+25% / Lv3: +100%/+50%"),
             "SOUL_LANTERN"),
         SkillDef("mind_control", "§5🧠 정신지배", "necromancer", 3, listOf(6, 11, 18),
-            listOf("§7몹 처치 시 해당 몹을 미니언으로 부활시킵니다.", "§7Lv1: 30% 확률 / Lv2: 50% / Lv3: 70%", "§7부활 미니언: 체력 매우 낮음, 30초 지속"),
+            listOf("§7몹 처치 시 해당 몹을 미니언으로 부활시킵니다.", "§7Lv1: 30% / Lv2: 50% / Lv3: 100%", "§7부활 미니언: 체력 매우 낮음, 30초 지속"),
             "SCULK_SHRIEKER")
     )
 

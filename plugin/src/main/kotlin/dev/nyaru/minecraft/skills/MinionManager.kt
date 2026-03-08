@@ -31,7 +31,8 @@ class MinionManager(private val plugin: NyaruPlugin) {
 
     fun getMaxZombies(summonUndeadLevel: Int): Int = summonUndeadLevel.coerceAtLeast(0)
 
-    fun getMaxSkeletons(skeletonArcherLevel: Int): Int = skeletonArcherLevel.coerceAtLeast(0)
+    fun getMaxMinions(summonUndeadLevel: Int, skeletonArcherLevel: Int): Int =
+        summonUndeadLevel.coerceAtLeast(0) + skeletonArcherLevel.coerceAtLeast(0)
 
     fun summonZombie(player: Player, count: Int, soulEmpowerLevel: Int) {
         repeat(count) {
@@ -45,21 +46,6 @@ class MinionManager(private val plugin: NyaruPlugin) {
                     .deserialize("§5[미니언] §f${player.name}의 좀비")
             )
             minionMap.getOrPut(player.uniqueId) { mutableListOf() }.add(zombie)
-        }
-    }
-
-    fun summonSkeleton(player: Player, count: Int, soulEmpowerLevel: Int) {
-        repeat(count) {
-            val loc = safeSpawnLocation(player.location)
-            val skeleton = player.world.spawn(loc, Skeleton::class.java)
-            setupMinion(skeleton, player, soulEmpowerLevel)
-            skeleton.equipment?.setItemInMainHand(ItemStack(Material.BOW))
-            skeleton.equipment?.helmet = ItemStack(Material.IRON_HELMET)
-            skeleton.customName(
-                net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection()
-                    .deserialize("§5[미니언] §f${player.name}의 스켈레톤")
-            )
-            minionMap.getOrPut(player.uniqueId) { mutableListOf() }.add(skeleton)
         }
     }
 
@@ -125,13 +111,6 @@ class MinionManager(private val plugin: NyaruPlugin) {
                 .deserialize("§5[지배] §f${player.name}의 하수인")
         )
 
-        // Invisible body
-        mob.addPotionEffect(PotionEffect(
-            PotionEffectType.INVISIBILITY,
-            Integer.MAX_VALUE, 0,
-            false, false, false
-        ))
-
         // Very low HP — dies in ~1 hit (2/3/4)
         val hp = (1.0 + mindControlLevel).coerceAtMost(4.0)
         mob.getAttribute(Attribute.MAX_HEALTH)?.baseValue = hp
@@ -193,10 +172,10 @@ class MinionManager(private val plugin: NyaruPlugin) {
                         continue
                     }
 
-                    // Find nearest hostile mob within 12 blocks of owner (exclude all minions)
+                    // Find nearest mob within 12 blocks of owner (all mobs, exclude players & minions)
                     val target = ownerLoc.world?.getNearbyEntities(ownerLoc, 12.0, 12.0, 12.0)
-                        ?.filterIsInstance<Monster>()
-                        ?.filter { it.uniqueId != uuid && !isAnyMinion(it) }
+                        ?.filterIsInstance<Mob>()
+                        ?.filter { it !is Player && !isAnyMinion(it) }
                         ?.minByOrNull { it.location.distanceSquared(ownerLoc) }
 
                     if (target != null) {

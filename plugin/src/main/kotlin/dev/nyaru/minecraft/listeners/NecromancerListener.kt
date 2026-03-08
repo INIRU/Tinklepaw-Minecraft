@@ -77,24 +77,15 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         summonCooldown[uuid] = now
 
         val existingMinions = plugin.minionManager.getMinions(uuid)
-        val existingZombies = existingMinions.count { it is org.bukkit.entity.Zombie }
-        val existingSkeletons = existingMinions.count { it is org.bukkit.entity.Skeleton }
+        val existingCount = existingMinions.size
+        val maxMinions = plugin.minionManager.getMaxMinions(summonUndeadLv, skeletonArcherLv)
 
-        val maxZombies = plugin.minionManager.getMaxZombies(summonUndeadLv)
-        val maxSkeletons = plugin.minionManager.getMaxSkeletons(skeletonArcherLv)
-
-        val zombiesToSummon = (maxZombies - existingZombies).coerceAtLeast(0)
-        val skeletonsToSummon = (maxSkeletons - existingSkeletons).coerceAtLeast(0)
-
-        if (zombiesToSummon > 0) {
-            plugin.minionManager.summonZombie(player, zombiesToSummon, soulEmpowerLv)
-        }
-        if (skeletonsToSummon > 0) {
-            plugin.minionManager.summonSkeleton(player, skeletonsToSummon, soulEmpowerLv)
+        val toSummon = (maxMinions - existingCount).coerceAtLeast(0)
+        if (toSummon > 0) {
+            plugin.minionManager.summonZombie(player, toSummon, soulEmpowerLv)
         }
 
-        val totalZombies = existingZombies + zombiesToSummon
-        val totalSkeletons = existingSkeletons + skeletonsToSummon
+        val total = existingCount + toSummon
 
         player.playSound(player.location, Sound.ENTITY_WITHER_SPAWN, 0.6f, 1.5f)
         player.world.spawnParticle(
@@ -102,7 +93,7 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
             player.location.add(0.0, 1.0, 0.0),
             20, 0.5, 0.5, 0.5, 0.05
         )
-        player.sendMessage("§5§l☠ 미니언을 소환했습니다! §7(좀비: ${totalZombies}마리, 스켈레톤: ${totalSkeletons}마리)")
+        player.sendMessage("§5§l☠ 미니언을 소환했습니다! §7(좀비: ${total}마리)")
     }
 
     // ── Life Siphon: minion deals damage → heal owner ──────────────────────
@@ -185,7 +176,8 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     fun onNecromancerKill(event: EntityDeathEvent) {
         val dead = event.entity
-        if (dead !is Monster) return
+        if (dead !is Mob) return
+        if (dead is Player) return
         // Skip minions
         if (plugin.minionManager.isAnyMinion(dead)) return
 
@@ -199,7 +191,7 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         if (mindControlLv <= 0) return
 
         val chance = when (mindControlLv) {
-            1 -> 0.30; 2 -> 0.50; 3 -> 0.70; else -> 0.0
+            1 -> 0.30; 2 -> 0.50; 3 -> 1.0; else -> 0.0
         }
         if (Math.random() > chance) return
 
