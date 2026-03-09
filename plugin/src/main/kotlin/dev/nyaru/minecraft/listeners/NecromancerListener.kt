@@ -53,6 +53,9 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         if (action != org.bukkit.event.block.Action.RIGHT_CLICK_AIR &&
             action != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) return
 
+        // Only handle main hand to prevent double-fire
+        if (event.hand != org.bukkit.inventory.EquipmentSlot.HAND) return
+
         val heldItem = player.inventory.itemInMainHand
         if (heldItem.type != Material.AIR) return
 
