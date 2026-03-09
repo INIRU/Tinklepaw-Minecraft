@@ -172,7 +172,15 @@ class MinionManager(private val plugin: NyaruPlugin) {
                         continue
                     }
 
-                    // Only auto-target hostile mobs (Monster), not passive mobs like horses
+                    // Clear natural AI target if it's a minion or player
+                    if (mob is Creature) {
+                        val currentTarget = mob.target
+                        if (currentTarget != null && (currentTarget is Player || isAnyMinion(currentTarget))) {
+                            mob.target = null
+                        }
+                    }
+
+                    // Only auto-target hostile mobs (Monster), not passive mobs or other minions
                     val target = ownerLoc.world?.getNearbyEntities(ownerLoc, 12.0, 12.0, 12.0)
                         ?.filterIsInstance<Monster>()
                         ?.filter { !isAnyMinion(it) }
@@ -183,7 +191,8 @@ class MinionManager(private val plugin: NyaruPlugin) {
                             mob.target = target as? LivingEntity
                         }
                     } else {
-                        // Pathfind toward owner
+                        // No target — clear any stale target and pathfind toward owner
+                        if (mob is Creature) mob.target = null
                         if (mobLoc.world == ownerLoc.world && mobLoc.distance(ownerLoc) > 4.0) {
                             mob.pathfinder.moveTo(ownerLoc)
                         }

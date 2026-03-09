@@ -267,7 +267,7 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
         // 50% success, 50% fail
         val success = Random.nextBoolean()
-        val change = if (success) Random.nextInt(1, 4) else -Random.nextInt(0, 3)
+        val change = if (success) Random.nextInt(1, 4) else -Random.nextInt(1, 3)
         val newLevel = (currentLevel + change).coerceIn(0, 10)
 
         // Apply new level to item

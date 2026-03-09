@@ -56,6 +56,22 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         val heldItem = player.inventory.itemInMainHand
         if (heldItem.type != Material.AIR) return
 
+        event.isCancelled = true
+
+        // Toggle: if minions exist → despawn all
+        val existingMinions = plugin.minionManager.getMinions(uuid)
+        if (existingMinions.isNotEmpty()) {
+            plugin.minionManager.removeMinions(uuid)
+            player.playSound(player.location, Sound.ENTITY_ENDERMAN_TELEPORT, 0.8f, 0.6f)
+            player.world.spawnParticle(
+                Particle.SMOKE,
+                player.location.add(0.0, 1.0, 0.0),
+                15, 0.5, 0.5, 0.5, 0.02
+            )
+            player.sendMessage("§5§l☠ 미니언을 소환 해제했습니다.")
+            return
+        }
+
         val now = System.currentTimeMillis()
         val lastSummon = summonCooldown[uuid] ?: 0L
         if (now - lastSummon < 30_000L) {
@@ -70,23 +86,14 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         val soulEmpowerLv = skills.getLevel("soul_empower")
 
         if (summonUndeadLv == 0 && skeletonArcherLv == 0) {
-            player.sendMessage("§c언데드 소환 또는 해골 궁수 스킬이 필요합니다.")
+            player.sendMessage("§c언데드 소환 또는 추가 소환 스킬이 필요합니다.")
             return
         }
 
-        event.isCancelled = true
         summonCooldown[uuid] = now
 
-        val existingMinions = plugin.minionManager.getMinions(uuid)
-        val existingCount = existingMinions.size
         val maxMinions = plugin.minionManager.getMaxMinions(summonUndeadLv, skeletonArcherLv)
-
-        val toSummon = (maxMinions - existingCount).coerceAtLeast(0)
-        if (toSummon > 0) {
-            plugin.minionManager.summonZombie(player, toSummon, soulEmpowerLv)
-        }
-
-        val total = existingCount + toSummon
+        plugin.minionManager.summonZombie(player, maxMinions, soulEmpowerLv)
 
         player.playSound(player.location, Sound.ENTITY_WITHER_SPAWN, 0.6f, 1.5f)
         player.world.spawnParticle(
@@ -94,7 +101,19 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
             player.location.add(0.0, 1.0, 0.0),
             20, 0.5, 0.5, 0.5, 0.05
         )
-        player.sendMessage("§5§l☠ 미니언을 소환했습니다! §7(좀비: ${total}마리)")
+        player.sendMessage("§5§l☠ 미니언을 소환했습니다! §7(좀비: ${maxMinions}마리)")
+    }
+
+    // ── Protect minions from player damage ─────────────────────────────────
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onMinionHurt(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Mob ?: return
+        if (!plugin.minionManager.isAnyMinion(victim)) return
+        // Cancel all player damage to minions
+        if (event.damager is Player) {
+            event.isCancelled = true
+            return
+        }
     }
 
     // ── Retaliation: when owner is hit, minions target the attacker ────────
