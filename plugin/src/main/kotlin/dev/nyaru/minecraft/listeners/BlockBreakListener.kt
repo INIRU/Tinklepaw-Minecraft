@@ -204,12 +204,13 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
             val timberLevel = skills.getLevel("timber")
             val leafBlowerLevel = skills.getLevel("leaf_blower")
 
-            if (timberLevel >= 1) {
+            // Don't activate timber if the broken block is protected
+            if (timberLevel >= 1 && !plugin.protectionManager.isProtected(event.block.location)) {
                 timberActive.add(uuid)
                 val tool = player.inventory.itemInMainHand
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     try {
-                        breakConnectedLogs(event.block, blockType, leafBlowerLevel >= 1, tool, uuid.toString())
+                        breakConnectedLogs(event.block, blockType, leafBlowerLevel >= 1, tool)
                     } finally {
                         timberActive.remove(uuid)
                     }
@@ -265,8 +266,7 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
         origin: org.bukkit.block.Block,
         logType: Material,
         breakLeaves: Boolean,
-        tool: ItemStack,
-        playerUuid: String
+        tool: ItemStack
     ) {
         val pm = plugin.protectionManager
         val visited = mutableSetOf<org.bukkit.block.Block>()
@@ -289,8 +289,8 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 val isLeaf = breakLeaves && neighbor.type in LEAF_MATERIALS
                 if (!isLog && !isLeaf) continue
 
-                // Protection check for ALL chained blocks (logs + leaves)
-                if (pm.isProtected(neighbor.location) && !pm.canAccess(neighbor.location, playerUuid)) {
+                // Skip ALL protected blocks — no chaining through any protected block
+                if (pm.isProtected(neighbor.location)) {
                     visited.add(neighbor)
                     continue
                 }
