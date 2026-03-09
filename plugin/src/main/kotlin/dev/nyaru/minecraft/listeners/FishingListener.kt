@@ -5,6 +5,7 @@ import dev.nyaru.minecraft.model.Jobs
 import dev.nyaru.minecraft.skills.SkillManager
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Material
+import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.entity.Item
 import org.bukkit.event.EventHandler
@@ -67,6 +68,11 @@ class FishingListener(private val plugin: NyaruPlugin, private val skillManager:
                     val itemName = TREASURE_NAMES[treasure] ?: treasure.name
                     player.sendMessage(legacy.deserialize("§3§l보물 발견! §f$itemName"))
                     player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.5f)
+                    player.world.spawnParticle(
+                        Particle.TOTEM_OF_UNDYING,
+                        caught.location,
+                        15, 0.5, 0.5, 0.5, 0.1
+                    )
                 }
             }
         }
@@ -82,6 +88,12 @@ class FishingListener(private val plugin: NyaruPlugin, private val skillManager:
                     extraFish.amount = 1
                     player.world.dropItemNaturally(caught.location, extraFish)
                     player.sendActionBar(legacy.deserialize("§3§l🪤 그물 낚시! §7추가 아이템 획득"))
+                    player.playSound(player.location, Sound.ENTITY_FISHING_BOBBER_SPLASH, 0.8f, 1.3f)
+                    player.world.spawnParticle(
+                        Particle.SPLASH,
+                        caught.location,
+                        10, 0.3, 0.2, 0.3, 0.05
+                    )
                 }
             }
         }

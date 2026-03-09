@@ -54,6 +54,13 @@ class PlayerJoinListener(private val plugin: NyaruPlugin, private val actionBarM
         // Load or initialise local player data synchronously
         plugin.dataManager.loadPlayer(uuid, player.name)
 
+        // Load title data into TitleManager
+        plugin.titleManager.loadPlayer(
+            uuid,
+            plugin.dataManager.getEarnedTitles(uuid),
+            plugin.dataManager.getSelectedGameTitle(uuid)
+        )
+
         if (plugin.dataManager.isLinked(uuid)) {
             // Grant daily reward if eligible
             val reward = plugin.config.getInt("daily-reward.amount", 100)
@@ -101,6 +108,7 @@ class PlayerJoinListener(private val plugin: NyaruPlugin, private val actionBarM
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val uuid = event.player.uniqueId
         frozenPlayers.remove(uuid)
+        plugin.titleManager.unloadPlayer(uuid)
         plugin.dataManager.unloadPlayer(uuid)
     }
 

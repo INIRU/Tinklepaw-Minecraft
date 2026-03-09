@@ -111,6 +111,12 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
             if (tridentLv > 0) {
                 val bonus = when (tridentLv) { 1 -> 0.15; 2 -> 0.30; else -> 0.50 }
                 event.damage = event.damage * (1.0 + bonus)
+                val target = event.entity
+                if (target is LivingEntity) {
+                    damager.world.spawnParticle(Particle.ENCHANT, target.location.add(0.0, 1.0, 0.0), 20, 0.4, 0.5, 0.4, 1.0)
+                    damager.world.spawnParticle(Particle.DRIPPING_WATER, target.location.add(0.0, 1.5, 0.0), 8, 0.3, 0.3, 0.3, 0.0)
+                }
+                damager.playSound(damager.location, Sound.ITEM_TRIDENT_HIT, 1.0f, 1.3f)
             }
         }
 
@@ -120,6 +126,12 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
             if (furyLv > 0) {
                 val bonus = when (furyLv) { 1 -> 0.15; 2 -> 0.30; else -> 0.50 }
                 event.damage = event.damage * (1.0 + bonus)
+                val target = event.entity
+                if (target is LivingEntity) {
+                    damager.world.spawnParticle(Particle.SWEEP_ATTACK, target.location.add(0.0, 0.8, 0.0), 2, 0.2, 0.0, 0.2, 0.0)
+                    damager.world.spawnParticle(Particle.DAMAGE_INDICATOR, target.location.add(0.0, 1.0, 0.0), 5, 0.3, 0.3, 0.3, 0.1)
+                }
+                damager.playSound(damager.location, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.8f, 0.8f)
             }
         }
 
@@ -132,6 +144,11 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                 val swordLv = skills.getLevel("sword_mastery")
                 if (swordLv > 0) {
                     damage *= (1.0 + swordLv * 0.1)
+                    val target = event.entity
+                    if (target is LivingEntity) {
+                        damager.world.spawnParticle(Particle.SWEEP_ATTACK, target.location.add(0.0, 0.8, 0.0), 1, 0.0, 0.0, 0.0, 0.0)
+                        damager.playSound(damager.location, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.6f, 1.2f)
+                    }
                 }
             }
 
@@ -144,6 +161,8 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                     else -> 0.35
                 }
                 damage *= (1.0 + bonusMultiplier)
+                damager.world.spawnParticle(Particle.FLAME, damager.location.add(0.0, 1.0, 0.0), 8, 0.3, 0.4, 0.3, 0.02)
+                damager.playSound(damager.location, Sound.ENTITY_BLAZE_AMBIENT, 0.3f, 1.5f)
             }
 
             // Critical Strike: chance for 1.5x damage
@@ -152,7 +171,13 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                 val critChance = critLv * 0.10
                 if (Math.random() < critChance) {
                     damage *= 1.5
-                    damager.sendActionBar(legacy.deserialize("§c§l치명타!"))
+                    val target = event.entity
+                    if (target is LivingEntity) {
+                        damager.world.spawnParticle(Particle.CRIT, target.location.add(0.0, 1.0, 0.0), 15, 0.4, 0.5, 0.4, 0.3)
+                        damager.world.spawnParticle(Particle.ENCHANT, target.location.add(0.0, 1.0, 0.0), 10, 0.3, 0.3, 0.3, 0.5)
+                    }
+                    damager.playSound(damager.location, Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.0f, 0.8f)
+                    damager.sendActionBar(legacy.deserialize("§c§l⚡ 치명타!"))
                 }
             }
 
@@ -170,6 +195,9 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                         0,
                         false, true, true
                     ))
+                    val target = event.entity as LivingEntity
+                    damager.world.spawnParticle(Particle.SOUL_FIRE_FLAME, target.location.add(0.0, 1.0, 0.0), 12, 0.3, 0.4, 0.3, 0.03)
+                    damager.world.spawnParticle(Particle.ASH, target.location.add(0.0, 0.5, 0.0), 20, 0.5, 0.5, 0.5, 0.0)
                     damager.sendActionBar(legacy.deserialize("§8§l☠ 치명적 일격!"))
                     damager.playSound(damager.location, Sound.ENTITY_WITHER_HURT, 0.5f, 1.5f)
                 }
@@ -196,7 +224,10 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                         ))
                     }
                     damager.playSound(damager.location, Sound.ENTITY_ENDER_DRAGON_GROWL, 0.6f, 1.2f)
-                    damager.sendActionBar(legacy.deserialize("§c§l전투의 함성! §7주변 적에게 약화 적용"))
+                    damager.playSound(damager.location, Sound.ENTITY_RAVAGER_ROAR, 0.4f, 1.0f)
+                    damager.world.spawnParticle(Particle.SONIC_BOOM, damager.location.add(0.0, 1.0, 0.0), 1, 0.0, 0.0, 0.0, 0.0)
+                    damager.world.spawnParticle(Particle.EXPLOSION, damager.location, 3, 1.0, 0.5, 1.0, 0.0)
+                    damager.sendActionBar(legacy.deserialize("§c§l📯 전투의 함성! §7주변 적에게 약화 적용"))
                 }
             }
         }
@@ -268,7 +299,11 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                     plugin.server.scheduler.runTask(plugin, Runnable {
                         attacker.damage(reflectDmg)
                     })
-                    player.world.spawnParticle(Particle.CRIT, player.location.add(0.0, 1.0, 0.0), 10, 0.3, 0.3, 0.3, 0.1)
+                    player.world.spawnParticle(Particle.CRIT, player.location.add(0.0, 1.0, 0.0), 15, 0.4, 0.5, 0.4, 0.2)
+                    player.world.spawnParticle(Particle.ENCHANT, player.location.add(0.0, 1.0, 0.0), 20, 0.5, 0.5, 0.5, 1.0)
+                    player.world.spawnParticle(Particle.ELECTRIC_SPARK, attacker.location.add(0.0, 1.0, 0.0), 10, 0.3, 0.3, 0.3, 0.1)
+                    player.playSound(player.location, Sound.ITEM_SHIELD_BLOCK, 1.0f, 1.5f)
+                    player.playSound(player.location, Sound.ENTITY_IRON_GOLEM_HURT, 0.5f, 1.8f)
                 }
             }
         }

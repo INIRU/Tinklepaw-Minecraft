@@ -5,6 +5,7 @@ import dev.nyaru.minecraft.skills.SkillManager
 import dev.nyaru.minecraft.util.triggerLevelUp
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Material
+import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.NamespacedKey
 import org.bukkit.block.data.Ageable
@@ -145,6 +146,11 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 val pm = plugin.protectionManager
                 val playerUuidStr = uuid.toString()
                 player.playSound(player.location, Sound.ITEM_CROP_PLANT, 0.7f, 1.2f)
+                player.world.spawnParticle(
+                    Particle.HAPPY_VILLAGER,
+                    player.location.add(0.0, 0.5, 0.0),
+                    12, 1.5, 0.3, 1.5, 0.0
+                )
                 val harvestFortune = skills.getLevel("harvest_fortune")
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     try {
@@ -209,6 +215,12 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                 timberActive.add(uuid)
                 val tool = player.inventory.itemInMainHand
                 val brokenBlock = event.block
+                player.playSound(player.location, Sound.BLOCK_WOOD_BREAK, 1.0f, 0.6f)
+                player.world.spawnParticle(
+                    Particle.SWEEP_ATTACK,
+                    brokenBlock.location.add(0.5, 0.5, 0.5),
+                    3, 0.5, 0.5, 0.5, 0.0
+                )
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     try {
                         breakConnectedLogs(brokenBlock, blockType, leafBlowerLevel >= 1, tool)
@@ -224,6 +236,9 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
                         plugin.server.scheduler.runTaskLater(plugin, Runnable {
                             if (brokenBlock.type == Material.AIR) {
                                 brokenBlock.type = sapling
+                                val sapLoc = brokenBlock.location.add(0.5, 0.5, 0.5)
+                                player.world.spawnParticle(Particle.HAPPY_VILLAGER, sapLoc, 8, 0.3, 0.3, 0.3, 0.0)
+                                player.playSound(sapLoc, Sound.BLOCK_GRASS_PLACE, 0.8f, 1.3f)
                             }
                         }, 5L)
                     }
@@ -255,6 +270,11 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
             }
         }
         player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.3f, 1.5f)
+        player.world.spawnParticle(
+            Particle.ELECTRIC_SPARK,
+            player.location.add(0.0, 1.0, 0.0),
+            5, 0.3, 0.3, 0.3, 0.05
+        )
     }
 
     private fun logToSapling(logType: Material): Material? = when (logType) {

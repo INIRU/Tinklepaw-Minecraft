@@ -50,3 +50,6 @@ commands:
   배낭:
     description: 개인 배낭 (추가 보관함)
     usage: /배낭 [업그레이드]
+  칭호:
+    description: 칭호 선택 GUI
+    usage: /칭호

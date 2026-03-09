@@ -16,6 +16,8 @@ class DataManager(private val dataFolder: File) {
         var slotSkills: MutableMap<Int, SkillData> = mutableMapOf(),
         var home: HomeLocation? = null,
         var lastDailyReward: String? = null,
+        var earnedTitles: MutableSet<String> = mutableSetOf(),
+        var selectedGameTitle: String? = null,
         var dirty: Boolean = false
     )
 
@@ -108,6 +110,9 @@ class DataManager(private val dataFolder: File) {
             titleIconUrl = cfg.getString("title-icon-url")
         )
 
+        val earnedTitles = cfg.getStringList("game-titles.earned").toMutableSet()
+        val selectedGameTitle = cfg.getString("game-titles.selected")
+
         val home = if (cfg.getBoolean("home.set", false)) {
             HomeLocation(
                 world = cfg.getString("home.world", "world")!!,
@@ -123,7 +128,9 @@ class DataManager(private val dataFolder: File) {
             info = info,
             slotSkills = slotSkills,
             home = home,
-            lastDailyReward = cfg.getString("last-daily-reward")
+            lastDailyReward = cfg.getString("last-daily-reward"),
+            earnedTitles = earnedTitles,
+            selectedGameTitle = selectedGameTitle
         )
         return info
     }
@@ -359,6 +366,19 @@ class DataManager(private val dataFolder: File) {
         cached.dirty = true
     }
 
+    // ── Game Titles ──
+
+    fun getEarnedTitles(uuid: UUID): Set<String> = cache[uuid]?.earnedTitles ?: emptySet()
+
+    fun getSelectedGameTitle(uuid: UUID): String? = cache[uuid]?.selectedGameTitle
+
+    fun updatePlayerTitles(uuid: UUID, earned: Set<String>, selected: String?) {
+        val cached = cache[uuid] ?: return
+        cached.earnedTitles = earned.toMutableSet()
+        cached.selectedGameTitle = selected
+        cached.dirty = true
+    }
+
     // ── Persistence ──
 
     fun save(uuid: UUID) {
@@ -394,6 +414,10 @@ class DataManager(private val dataFolder: File) {
                 cfg.set("skills.$slotIdx.$key", lv)
             }
         }
+
+        // Game titles
+        cfg.set("game-titles.earned", cached.earnedTitles.toList())
+        cfg.set("game-titles.selected", cached.selectedGameTitle)
 
         if (cached.home != null) {
             cfg.set("home.set", true)

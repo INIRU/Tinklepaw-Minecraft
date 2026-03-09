@@ -39,7 +39,10 @@ import dev.nyaru.minecraft.listeners.NecromancerListener
 import dev.nyaru.minecraft.listeners.SoulboundListener
 import dev.nyaru.minecraft.listeners.SmeltListener
 import dev.nyaru.minecraft.listeners.WorldEventListener
+import dev.nyaru.minecraft.commands.TitleCommand
+import dev.nyaru.minecraft.gui.TitleGui
 import dev.nyaru.minecraft.skills.MinionManager
+import dev.nyaru.minecraft.skills.TitleManager
 import dev.nyaru.minecraft.logging.BlockLogger
 import dev.nyaru.minecraft.world.StructureResetManager
 import dev.nyaru.minecraft.npc.NpcType
@@ -81,6 +84,9 @@ class NyaruPlugin : JavaPlugin() {
         private set
 
     lateinit var minionManager: MinionManager
+        private set
+
+    lateinit var titleManager: TitleManager
         private set
 
     lateinit var structureResetManager: StructureResetManager
@@ -125,12 +131,16 @@ class NyaruPlugin : JavaPlugin() {
         skillManager.startScarecrowCheck()
         minionManager = MinionManager(this)
         minionManager.startMinionTask()
+        titleManager = TitleManager(this)
+        titleManager.startPeriodicCheck()
+        server.pluginManager.registerEvents(TitleGui.TitleGuiListener(this), this)
         server.pluginManager.registerEvents(NecromancerListener(this), this)
         sidebarManager = SidebarManager(this, protectionManager)
         server.pluginManager.registerEvents(sidebarManager, this)
         actionBarManager = ActionBarManager(this, protectionManager)
         val chatTabListener = ChatTabListener(actionBarManager)
         actionBarManager.chatTabListener = chatTabListener
+        chatTabListener.plugin = this
 
         server.pluginManager.registerEvents(actionBarManager, this)
         server.pluginManager.registerEvents(chatTabListener, this)
@@ -205,6 +215,7 @@ class NyaruPlugin : JavaPlugin() {
         val backpackCmd = BackpackCommand(this)
         getCommand("배낭")?.setExecutor(backpackCmd)
         getCommand("배낭")?.tabCompleter = backpackCmd
+        getCommand("칭호")?.setExecutor(TitleCommand(this))
 
         logger.info("NyaruPlugin 활성화 완료!")
     }

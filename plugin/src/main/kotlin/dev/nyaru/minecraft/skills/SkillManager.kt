@@ -6,6 +6,8 @@ import dev.nyaru.minecraft.listeners.LEAF_MATERIALS
 import dev.nyaru.minecraft.model.Jobs
 import dev.nyaru.minecraft.model.SkillData
 import org.bukkit.Bukkit
+import org.bukkit.Particle
+import org.bukkit.Sound
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
@@ -149,6 +151,11 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                         forestLevel - 1,
                         false, false, true
                     ))
+                    player.world.spawnParticle(
+                        Particle.HAPPY_VILLAGER,
+                        player.location.add(0.0, 1.5, 0.0),
+                        3, 0.4, 0.4, 0.4, 0.0
+                    )
                 }
 
                 // Bark Armor: Resistance near trees
@@ -160,6 +167,11 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                         barkArmorLevel - 1,
                         false, false, true
                     ))
+                    player.world.spawnParticle(
+                        Particle.WAX_ON,
+                        player.location.add(0.0, 1.0, 0.0),
+                        4, 0.3, 0.5, 0.3, 0.0
+                    )
                 }
             }
         }, 60L, 60L)
@@ -181,6 +193,11 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                         0,
                         false, false, true
                     ))
+                    player.world.spawnParticle(
+                        Particle.ENCHANT,
+                        player.location.add(0.0, 2.0, 0.0),
+                        5, 0.3, 0.2, 0.3, 0.5
+                    )
                 }
             }
         }, 60L, 60L)
@@ -205,6 +222,11 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                 if (rainLv >= 3) {
                     player.addPotionEffect(PotionEffect(PotionEffectType.REGENERATION, 300, 0, false, false, true))
                 }
+                player.world.spawnParticle(
+                    Particle.DRIPPING_WATER,
+                    player.location.add(0.0, 2.0, 0.0),
+                    6, 0.5, 0.3, 0.5, 0.0
+                )
             }
         }, 60L, 60L)
     }
@@ -222,6 +244,7 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                 if (Math.random() >= chance) continue
                 val loc = player.location
                 val world = loc.world ?: continue
+                var grew = false
                 for (dx in -5..5) {
                     for (dz in -5..5) {
                         val block = world.getBlockAt(loc.blockX + dx, loc.blockY, loc.blockZ + dz)
@@ -229,8 +252,17 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                         if (data is org.bukkit.block.data.Ageable && data.age < data.maximumAge) {
                             data.age = (data.age + 1).coerceAtMost(data.maximumAge)
                             block.blockData = data
+                            world.spawnParticle(
+                                Particle.HAPPY_VILLAGER,
+                                block.location.add(0.5, 0.8, 0.5),
+                                3, 0.2, 0.2, 0.2, 0.0
+                            )
+                            grew = true
                         }
                     }
+                }
+                if (grew) {
+                    player.playSound(player.location, Sound.ITEM_BONE_MEAL_USE, 0.4f, 1.2f)
                 }
             }
         }, 60L, 60L)
@@ -250,6 +282,11 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                     .filterIsInstance<org.bukkit.entity.Monster>()
                 for (mob in nearbyMobs) {
                     mob.addPotionEffect(PotionEffect(PotionEffectType.SLOWNESS, 120, 0, false, false, false))
+                    mob.world.spawnParticle(
+                        Particle.SOUL,
+                        mob.location.add(0.0, 1.0, 0.0),
+                        2, 0.2, 0.3, 0.2, 0.02
+                    )
                 }
             }
         }, 100L, 100L)
