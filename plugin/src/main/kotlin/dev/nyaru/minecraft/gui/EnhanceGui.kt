@@ -136,13 +136,11 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
                 legacy.deserialize("§7도구를 슬롯에 올려두세요."),
                 legacy.deserialize("§7강화 버튼을 클릭하면 강화가 진행됩니다."),
                 Component.empty(),
-                legacy.deserialize("§a성공(50%):"),
-                legacy.deserialize("§7  랜덤 인첸트 §f1~3개§7에 §a+1~3 레벨"),
-                legacy.deserialize("§c실패(50%):"),
-                legacy.deserialize("§7  기존 인첸트 §f1~3개§7에서 §c-0~3 레벨"),
+                legacy.deserialize("§a▲ 버프: §f랜덤 인첸트 1~3개에 +1~3 레벨"),
+                legacy.deserialize("§c▼ 너프: §f기존 인첸트 1~3개에서 -0~3 레벨"),
                 Component.empty(),
-                legacy.deserialize("§e✦ 매번 다른 인첸트가 붙어 나만의 무기!"),
-                legacy.deserialize("§7강화 비용: §e(현재 강화 + 1) × 500냥"),
+                legacy.deserialize("§e✦ 매번 동시에 적용! 나만의 무기를 만들자!"),
+                legacy.deserialize("§7강화 비용: §e500냥"),
                 legacy.deserialize("§7최대 강화: §f+10")
             ))
         }
@@ -166,14 +164,13 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
                     legacy.deserialize("§c더 이상 강화할 수 없습니다.")
                 ))
             } else {
-                val cost = (currentLevel + 1) * 500
                 meta.displayName(legacy.deserialize("§d§l⚒ 강화하기"))
                 meta.lore(listOf(
-                    legacy.deserialize("§7비용: §e${cost}냥"),
+                    legacy.deserialize("§7비용: §e500냥"),
                     legacy.deserialize("§7현재 강화: §f+${currentLevel}"),
                     Component.empty(),
-                    legacy.deserialize("§a성공: §f랜덤 인첸트 1~3개 +1~3"),
-                    legacy.deserialize("§c실패: §f기존 인첸트 1~3개 -0~3")
+                    legacy.deserialize("§a▲ 랜덤 인첸트 1~3개 +1~3"),
+                    legacy.deserialize("§c▼ 기존 인첸트 1~3개 -0~3")
                 ))
             }
         }
@@ -296,12 +293,12 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
             return
         }
 
-        val cost = (currentLevel + 1) * 500
+        val cost = 500
 
         if (!plugin.dataManager.hasBalance(player.uniqueId, cost)) {
             val balance = plugin.dataManager.getBalance(player.uniqueId)
             player.playSound(player.location, Sound.ENTITY_VILLAGER_NO, 0.8f, 1.0f)
-            player.sendMessage("§c냥이 부족합니다. (보유: §e${balance}냥 §c/ 필요: §e${cost}냥§c)")
+            player.sendMessage("§c냥이 부족합니다. (보유: §e${balance}냥 §c/ 필요: §e500냥§c)")
             return
         }
 
@@ -309,73 +306,66 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
         plugin.actionBarManager.refresh(player.uniqueId)
         plugin.dataManager.save(player.uniqueId)
 
-        val success = Random.nextBoolean()
         val mat = toolItem.type
         val applicable = getApplicableEnchantments(mat)
-        val changes = mutableListOf<String>()
+        val upChanges = mutableListOf<String>()
+        val downChanges = mutableListOf<String>()
 
-        if (success) {
-            // Pick 1-3 random enchantments from pool, add +1~3 levels each
-            val count = Random.nextInt(1, 4)
-            val picked = applicable.shuffled().take(count)
-            for (ench in picked) {
-                val addLevels = Random.nextInt(1, 4)
-                val currentEnchLevel = meta.getEnchantLevel(ench)
-                val newEnchLevel = currentEnchLevel + addLevels
-                meta.addEnchant(ench, newEnchLevel, true)
-                val name = ENCHANT_NAMES[ench] ?: ench.key.key
-                changes.add("§a  ${name} §f${currentEnchLevel} → ${newEnchLevel} §a(+${addLevels})")
-            }
-            val newLevel = (currentLevel + 1).coerceAtMost(10)
-            meta.persistentDataContainer.set(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER, newLevel)
-            updateDisplayName(meta, mat, newLevel)
-            updateEnhanceLore(meta, newLevel)
-            toolItem.itemMeta = meta
-            inventory.setItem(TOOL_SLOT, toolItem)
-            updateEnhanceButton()
+        // Step 1: Buff — pick 1-3 random enchantments from pool, add +1~3 levels each
+        val buffCount = Random.nextInt(1, 4)
+        val buffPicked = applicable.shuffled().take(buffCount)
+        for (ench in buffPicked) {
+            val addLevels = Random.nextInt(1, 4)
+            val currentEnchLevel = meta.getEnchantLevel(ench)
+            val newEnchLevel = currentEnchLevel + addLevels
+            meta.addEnchant(ench, newEnchLevel, true)
+            val name = ENCHANT_NAMES[ench] ?: ench.key.key
+            upChanges.add("§a  ▲ ${name} §f${currentEnchLevel} → ${newEnchLevel} §a(+${addLevels})")
+        }
 
-            player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f)
-            player.world.spawnParticle(
-                Particle.ENCHANT,
-                player.location.add(0.0, 1.5, 0.0),
-                30, 0.5, 0.5, 0.5, 1.0
-            )
-            player.sendMessage("§a§l⚒ 강화 성공! §f+${currentLevel} §a→ §f+${newLevel}")
-            for (line in changes) player.sendMessage(line)
-        } else {
-            // Pick 1-3 random existing enchantments on the item, reduce by 0~3 levels each
-            val existingEnchants = meta.enchants.keys.toList()
-            val newLevel = (currentLevel - 1).coerceAtLeast(0)
-
-            if (existingEnchants.isNotEmpty()) {
-                val count = Random.nextInt(1, 4).coerceAtMost(existingEnchants.size)
-                val picked = existingEnchants.shuffled().take(count)
-                for (ench in picked) {
-                    val reduceLevels = Random.nextInt(0, 4)
-                    val currentEnchLevel = meta.getEnchantLevel(ench)
-                    val newEnchLevel = currentEnchLevel - reduceLevels
+        // Step 2: Nerf — pick 1-3 random existing enchantments, reduce by 0~3 levels each
+        val existingEnchants = meta.enchants.keys.toList()
+        if (existingEnchants.isNotEmpty()) {
+            val nerfCount = Random.nextInt(1, 4).coerceAtMost(existingEnchants.size)
+            val nerfPicked = existingEnchants.shuffled().take(nerfCount)
+            for (ench in nerfPicked) {
+                val reduceLevels = Random.nextInt(0, 4)
+                if (reduceLevels == 0) {
                     val name = ENCHANT_NAMES[ench] ?: ench.key.key
-                    if (newEnchLevel <= 0) {
-                        meta.removeEnchant(ench)
-                        changes.add("§c  ${name} §f${currentEnchLevel} → 0 §c(-${currentEnchLevel}, 제거됨)")
-                    } else {
-                        meta.addEnchant(ench, newEnchLevel, true)
-                        changes.add("§c  ${name} §f${currentEnchLevel} → ${newEnchLevel} §c(-${reduceLevels})")
-                    }
+                    downChanges.add("§7  - ${name} §f변화 없음")
+                    continue
+                }
+                val currentEnchLevel = meta.getEnchantLevel(ench)
+                val newEnchLevel = currentEnchLevel - reduceLevels
+                val name = ENCHANT_NAMES[ench] ?: ench.key.key
+                if (newEnchLevel <= 0) {
+                    meta.removeEnchant(ench)
+                    downChanges.add("§c  ▼ ${name} §f${currentEnchLevel} → 0 §c(-${currentEnchLevel}, 제거됨)")
+                } else {
+                    meta.addEnchant(ench, newEnchLevel, true)
+                    downChanges.add("§c  ▼ ${name} §f${currentEnchLevel} → ${newEnchLevel} §c(-${reduceLevels})")
                 }
             }
-
-            meta.persistentDataContainer.set(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER, newLevel)
-            updateDisplayName(meta, mat, newLevel)
-            updateEnhanceLore(meta, newLevel)
-            toolItem.itemMeta = meta
-            inventory.setItem(TOOL_SLOT, toolItem)
-            updateEnhanceButton()
-
-            player.playSound(player.location, Sound.ENTITY_ITEM_BREAK, 1.0f, 0.8f)
-            player.sendMessage("§c§l⚒ 강화 실패! §f+${currentLevel} §c→ §f+${newLevel}")
-            for (line in changes) player.sendMessage(line)
         }
+
+        val newLevel = (currentLevel + 1).coerceAtMost(10)
+        meta.persistentDataContainer.set(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER, newLevel)
+        updateDisplayName(meta, mat, newLevel)
+        updateEnhanceLore(meta, newLevel)
+        toolItem.itemMeta = meta
+        inventory.setItem(TOOL_SLOT, toolItem)
+        updateEnhanceButton()
+
+        player.playSound(player.location, Sound.BLOCK_ANVIL_USE, 1.0f, 1.0f)
+        player.playSound(player.location, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 0.8f, 1.2f)
+        player.world.spawnParticle(
+            Particle.ENCHANT,
+            player.location.add(0.0, 1.5, 0.0),
+            30, 0.5, 0.5, 0.5, 1.0
+        )
+        player.sendMessage("§d§l⚒ 강화 완료! §f+${currentLevel} §d→ §f+${newLevel}")
+        for (line in upChanges) player.sendMessage(line)
+        for (line in downChanges) player.sendMessage(line)
     }
 
     private fun updateDisplayName(meta: org.bukkit.inventory.meta.ItemMeta, mat: Material, newLevel: Int) {
