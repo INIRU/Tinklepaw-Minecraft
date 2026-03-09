@@ -6,6 +6,7 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
+import org.bukkit.Particle
 import org.bukkit.Sound
 import org.bukkit.enchantments.Enchantment
 import org.bukkit.entity.Player
@@ -17,11 +18,27 @@ import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import org.bukkit.persistence.PersistentDataType
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.ceil
 import kotlin.random.Random
 
 private val ENHANCE_LEVEL_KEY = NamespacedKey("nyaru", "enhance_level")
 val SOULBOUND_KEY = NamespacedKey("nyaru", "soulbound")
+
+private val ENCHANT_NAMES = mapOf(
+    Enchantment.EFFICIENCY to "효율",
+    Enchantment.FORTUNE to "행운",
+    Enchantment.UNBREAKING to "내구성",
+    Enchantment.SILK_TOUCH to "섬세한 손길",
+    Enchantment.MENDING to "수선",
+    Enchantment.SHARPNESS to "날카로움",
+    Enchantment.SMITE to "강타",
+    Enchantment.FIRE_ASPECT to "발화",
+    Enchantment.KNOCKBACK to "밀치기",
+    Enchantment.SWEEPING_EDGE to "휩쓸기",
+    Enchantment.LOOTING to "약탈",
+    Enchantment.DENSITY to "밀도",
+    Enchantment.BREACH to "관통",
+    Enchantment.WIND_BURST to "바람 폭발"
+)
 
 class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
 
@@ -56,6 +73,35 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
         fun isShovel(mat: Material) = mat.name.endsWith("_SHOVEL")
         fun isMace(mat: Material) = mat == Material.MACE
 
+        fun getApplicableEnchantments(mat: Material): List<Enchantment> = when {
+            isPickaxe(mat) -> listOf(
+                Enchantment.EFFICIENCY, Enchantment.FORTUNE, Enchantment.UNBREAKING,
+                Enchantment.SILK_TOUCH, Enchantment.MENDING
+            )
+            isSword(mat) -> listOf(
+                Enchantment.SHARPNESS, Enchantment.SMITE, Enchantment.FIRE_ASPECT,
+                Enchantment.KNOCKBACK, Enchantment.SWEEPING_EDGE, Enchantment.LOOTING,
+                Enchantment.UNBREAKING, Enchantment.MENDING
+            )
+            isAxe(mat) -> listOf(
+                Enchantment.EFFICIENCY, Enchantment.SHARPNESS, Enchantment.SMITE,
+                Enchantment.UNBREAKING, Enchantment.FORTUNE, Enchantment.MENDING
+            )
+            isHoe(mat) -> listOf(
+                Enchantment.EFFICIENCY, Enchantment.FORTUNE, Enchantment.UNBREAKING,
+                Enchantment.SILK_TOUCH, Enchantment.MENDING
+            )
+            isShovel(mat) -> listOf(
+                Enchantment.EFFICIENCY, Enchantment.FORTUNE, Enchantment.UNBREAKING,
+                Enchantment.SILK_TOUCH, Enchantment.MENDING
+            )
+            isMace(mat) -> listOf(
+                Enchantment.DENSITY, Enchantment.BREACH, Enchantment.UNBREAKING,
+                Enchantment.WIND_BURST, Enchantment.MENDING
+            )
+            else -> emptyList()
+        }
+
         fun enhanceLevelColor(level: Int): String = when {
             level <= 3 -> "§a"
             level <= 6 -> "§b"
@@ -81,27 +127,27 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
         val bgGlass = makeGlass(Material.PURPLE_STAINED_GLASS_PANE)
         for (i in 0 until INV_SIZE) inventory.setItem(i, bgGlass)
 
-        // Slot 22: Open tool slot (leave empty / no glass)
         inventory.setItem(TOOL_SLOT, null)
 
-        // Slot 4: Info book
         val info = ItemStack(Material.BOOK)
         info.editMeta { meta ->
             meta.displayName(legacy.deserialize("§e강화 안내"))
             meta.lore(listOf(
-                legacy.deserialize("§7슬롯 §f22§7에 도구를 올려두세요."),
+                legacy.deserialize("§7도구를 슬롯에 올려두세요."),
                 legacy.deserialize("§7강화 버튼을 클릭하면 강화가 진행됩니다."),
                 Component.empty(),
-                legacy.deserialize("§a성공(50%): §f+1 ~ +3 강화"),
-                legacy.deserialize("§c실패(50%): §f-0 ~ -2 강화"),
-                legacy.deserialize("§7강화 수치는 최소 §f+0§7, 최대 §f+10"),
+                legacy.deserialize("§a성공(50%):"),
+                legacy.deserialize("§7  랜덤 인첸트 §f1~3개§7에 §a+1~3 레벨"),
+                legacy.deserialize("§c실패(50%):"),
+                legacy.deserialize("§7  기존 인첸트 §f1~3개§7에서 §c-0~3 레벨"),
                 Component.empty(),
-                legacy.deserialize("§7강화 비용: §e(현재 강화 + 1) × 500냥")
+                legacy.deserialize("§e✦ 매번 다른 인첸트가 붙어 나만의 무기!"),
+                legacy.deserialize("§7강화 비용: §e(현재 강화 + 1) × 500냥"),
+                legacy.deserialize("§7최대 강화: §f+10")
             ))
         }
         inventory.setItem(INFO_SLOT, info)
 
-        // Slot 31: Enhance button (recalculated when tool is placed)
         updateEnhanceButton()
         updateSoulboundButton()
     }
@@ -125,7 +171,9 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
                 meta.lore(listOf(
                     legacy.deserialize("§7비용: §e${cost}냥"),
                     legacy.deserialize("§7현재 강화: §f+${currentLevel}"),
-                    legacy.deserialize("§7결과: §a+1~3 §7또는 §c-0~2")
+                    Component.empty(),
+                    legacy.deserialize("§a성공: §f랜덤 인첸트 1~3개 +1~3"),
+                    legacy.deserialize("§c실패: §f기존 인첸트 1~3개 -0~3")
                 ))
             }
         }
@@ -184,10 +232,8 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
         plugin.actionBarManager.refresh(player.uniqueId)
         plugin.dataManager.save(player.uniqueId)
 
-        // Apply soulbound tag
         meta.persistentDataContainer.set(SOULBOUND_KEY, PersistentDataType.BYTE, 1)
 
-        // Add soulbound lore
         val existingLore = meta.lore()?.toMutableList() ?: mutableListOf()
         val soulboundLine = legacy.deserialize("§d✦ 소울바운드 §7(사망 시 유지)")
         val soulboundPattern = "소울바운드"
@@ -207,13 +253,11 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
     fun handleClick(event: InventoryClickEvent) {
         val slot = event.rawSlot
 
-        // Allow clicks in the player's own inventory (pickup/place items)
         if (slot >= INV_SIZE) {
             Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton(); updateSoulboundButton() })
             return
         }
 
-        // Allow the tool slot to receive items
         if (slot == TOOL_SLOT) {
             event.isCancelled = false
             Bukkit.getScheduler().runTask(plugin, Runnable { updateEnhanceButton(); updateSoulboundButton() })
@@ -265,129 +309,113 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
         plugin.actionBarManager.refresh(player.uniqueId)
         plugin.dataManager.save(player.uniqueId)
 
-        // 50% success, 50% fail
         val success = Random.nextBoolean()
-        val change = if (success) Random.nextInt(1, 4) else -Random.nextInt(1, 3)
-        val newLevel = (currentLevel + change).coerceIn(0, 10)
-
-        // Apply new level to item
-        val updatedItem = applyEnhancement(toolItem, newLevel)
-        inventory.setItem(TOOL_SLOT, updatedItem)
-
-        updateEnhanceButton()
+        val mat = toolItem.type
+        val applicable = getApplicableEnchantments(mat)
+        val changes = mutableListOf<String>()
 
         if (success) {
+            // Pick 1-3 random enchantments from pool, add +1~3 levels each
+            val count = Random.nextInt(1, 4)
+            val picked = applicable.shuffled().take(count)
+            for (ench in picked) {
+                val addLevels = Random.nextInt(1, 4)
+                val currentEnchLevel = meta.getEnchantLevel(ench)
+                val newEnchLevel = currentEnchLevel + addLevels
+                meta.addEnchant(ench, newEnchLevel, true)
+                val name = ENCHANT_NAMES[ench] ?: ench.key.key
+                changes.add("§a  ${name} §f${currentEnchLevel} → ${newEnchLevel} §a(+${addLevels})")
+            }
+            val newLevel = (currentLevel + 1).coerceAtMost(10)
+            meta.persistentDataContainer.set(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER, newLevel)
+            updateDisplayName(meta, mat, newLevel)
+            updateEnhanceLore(meta, newLevel)
+            toolItem.itemMeta = meta
+            inventory.setItem(TOOL_SLOT, toolItem)
+            updateEnhanceButton()
+
             player.playSound(player.location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f)
-            player.sendMessage("§a§l강화 성공! §f+${currentLevel} §a→ §f+${newLevel} §7(+${change})")
+            player.world.spawnParticle(
+                Particle.ENCHANT,
+                player.location.add(0.0, 1.5, 0.0),
+                30, 0.5, 0.5, 0.5, 1.0
+            )
+            player.sendMessage("§a§l⚒ 강화 성공! §f+${currentLevel} §a→ §f+${newLevel}")
+            for (line in changes) player.sendMessage(line)
         } else {
+            // Pick 1-3 random existing enchantments on the item, reduce by 0~3 levels each
+            val existingEnchants = meta.enchants.keys.toList()
+            val newLevel = (currentLevel - 1).coerceAtLeast(0)
+
+            if (existingEnchants.isNotEmpty()) {
+                val count = Random.nextInt(1, 4).coerceAtMost(existingEnchants.size)
+                val picked = existingEnchants.shuffled().take(count)
+                for (ench in picked) {
+                    val reduceLevels = Random.nextInt(0, 4)
+                    val currentEnchLevel = meta.getEnchantLevel(ench)
+                    val newEnchLevel = currentEnchLevel - reduceLevels
+                    val name = ENCHANT_NAMES[ench] ?: ench.key.key
+                    if (newEnchLevel <= 0) {
+                        meta.removeEnchant(ench)
+                        changes.add("§c  ${name} §f${currentEnchLevel} → 0 §c(-${currentEnchLevel}, 제거됨)")
+                    } else {
+                        meta.addEnchant(ench, newEnchLevel, true)
+                        changes.add("§c  ${name} §f${currentEnchLevel} → ${newEnchLevel} §c(-${reduceLevels})")
+                    }
+                }
+            }
+
+            meta.persistentDataContainer.set(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER, newLevel)
+            updateDisplayName(meta, mat, newLevel)
+            updateEnhanceLore(meta, newLevel)
+            toolItem.itemMeta = meta
+            inventory.setItem(TOOL_SLOT, toolItem)
+            updateEnhanceButton()
+
             player.playSound(player.location, Sound.ENTITY_ITEM_BREAK, 1.0f, 0.8f)
-            player.sendMessage("§c§l강화 실패! §f+${currentLevel} §c→ §f+${newLevel} §7(${change})")
+            player.sendMessage("§c§l⚒ 강화 실패! §f+${currentLevel} §c→ §f+${newLevel}")
+            for (line in changes) player.sendMessage(line)
         }
     }
 
-    private fun applyEnhancement(original: ItemStack, newLevel: Int): ItemStack {
-        val item = original.clone()
-        val meta = item.itemMeta
-
-        // Store level in PDC
-        meta.persistentDataContainer.set(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER, newLevel)
-
-        // Remove old enhancement-related enchantments before reapplying
-        val mat = item.type
-
-        val enchantsToRemove = mutableListOf<Enchantment>()
-        if (isPickaxe(mat) || isAxe(mat) || isHoe(mat) || isShovel(mat)) {
-            enchantsToRemove += Enchantment.EFFICIENCY
-            enchantsToRemove += Enchantment.FORTUNE
-            enchantsToRemove += Enchantment.UNBREAKING
-        }
-        if (isSword(mat)) {
-            enchantsToRemove += Enchantment.SHARPNESS
-            enchantsToRemove += Enchantment.LOOTING
-            enchantsToRemove += Enchantment.UNBREAKING
-        }
-        if (isMace(mat)) {
-            enchantsToRemove += Enchantment.DENSITY
-            enchantsToRemove += Enchantment.BREACH
-            enchantsToRemove += Enchantment.UNBREAKING
-        }
-        for (ench in enchantsToRemove) {
-            meta.removeEnchant(ench)
-        }
-
-        // Apply enchantments based on new level
-        if (newLevel > 0) {
-            when {
-                isPickaxe(mat) -> {
-                    meta.addEnchant(Enchantment.EFFICIENCY, newLevel, true)
-                    meta.addEnchant(Enchantment.FORTUNE, ceil(newLevel / 2.0).toInt(), true)
-                    meta.addEnchant(Enchantment.UNBREAKING, ceil(newLevel / 3.0).toInt(), true)
-                }
-                isSword(mat) -> {
-                    meta.addEnchant(Enchantment.SHARPNESS, newLevel, true)
-                    meta.addEnchant(Enchantment.LOOTING, ceil(newLevel / 2.0).toInt(), true)
-                    meta.addEnchant(Enchantment.UNBREAKING, ceil(newLevel / 3.0).toInt(), true)
-                }
-                isAxe(mat) -> {
-                    meta.addEnchant(Enchantment.EFFICIENCY, newLevel, true)
-                    meta.addEnchant(Enchantment.SHARPNESS, ceil(newLevel / 2.0).toInt(), true)
-                    meta.addEnchant(Enchantment.UNBREAKING, ceil(newLevel / 3.0).toInt(), true)
-                }
-                isHoe(mat) -> {
-                    meta.addEnchant(Enchantment.EFFICIENCY, newLevel, true)
-                    meta.addEnchant(Enchantment.FORTUNE, ceil(newLevel / 2.0).toInt(), true)
-                    meta.addEnchant(Enchantment.UNBREAKING, ceil(newLevel / 3.0).toInt(), true)
-                }
-                isMace(mat) -> {
-                    meta.addEnchant(Enchantment.DENSITY, newLevel, true)
-                    meta.addEnchant(Enchantment.BREACH, ceil(newLevel / 2.0).toInt(), true)
-                    meta.addEnchant(Enchantment.UNBREAKING, ceil(newLevel / 3.0).toInt(), true)
-                }
-                isShovel(mat) -> {
-                    meta.addEnchant(Enchantment.EFFICIENCY, newLevel, true)
-                    meta.addEnchant(Enchantment.FORTUNE, ceil(newLevel / 2.0).toInt(), true)
-                    meta.addEnchant(Enchantment.UNBREAKING, ceil(newLevel / 3.0).toInt(), true)
-                }
-            }
-        }
-
-        // Update display name with enhance prefix
-        val levelColor = enhanceLevelColor(newLevel)
+    private fun updateDisplayName(meta: org.bukkit.inventory.meta.ItemMeta, mat: Material, newLevel: Int) {
         val originalName = if (meta.hasDisplayName()) {
-            legacy.serialize(meta.displayName()!!)
-                .removePrefix("§d[+${meta.persistentDataContainer.get(ENHANCE_LEVEL_KEY, PersistentDataType.INTEGER) ?: 0}] ")
-                .let { name ->
-                    // Strip any existing enhance prefix pattern "§d[+N] "
-                    val prefixRegex = Regex("§d\\[\\+\\d+] ")
-                    prefixRegex.replace(name, "")
-                }
+            val raw = legacy.serialize(meta.displayName()!!)
+            val prefixRegex = Regex("§.[§l]*\\[\\+\\d+] ")
+            prefixRegex.replace(raw, "")
         } else {
             mat.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
         }
 
         if (newLevel > 0) {
-            meta.displayName(legacy.deserialize("§d[+${newLevel}] ${originalName}"))
+            val levelColor = enhanceLevelColor(newLevel)
+            meta.displayName(legacy.deserialize("${levelColor}[+${newLevel}] §f${originalName}"))
         } else {
             meta.displayName(legacy.deserialize(originalName))
         }
+    }
 
-        // Update lore: replace or add enhance line
+    private fun updateEnhanceLore(meta: org.bukkit.inventory.meta.ItemMeta, newLevel: Int) {
         val existingLore = meta.lore()?.toMutableList() ?: mutableListOf()
-        val enhanceLine = legacy.deserialize("${levelColor}✦ 강화: §f+${newLevel}")
         val enhanceLinePattern = "✦ 강화:"
+        val levelColor = enhanceLevelColor(newLevel)
+        val enhanceLine = legacy.deserialize("${levelColor}✦ 강화: §f+${newLevel}")
 
         val enhanceIdx = existingLore.indexOfFirst { line ->
             legacy.serialize(line).contains(enhanceLinePattern)
         }
-        if (enhanceIdx >= 0) {
-            existingLore[enhanceIdx] = enhanceLine
+        if (newLevel > 0) {
+            if (enhanceIdx >= 0) {
+                existingLore[enhanceIdx] = enhanceLine
+            } else {
+                existingLore.add(0, enhanceLine)
+            }
         } else {
-            existingLore.add(0, enhanceLine)
+            if (enhanceIdx >= 0) {
+                existingLore.removeAt(enhanceIdx)
+            }
         }
         meta.lore(existingLore)
-
-        item.itemMeta = meta
-        return item
     }
 
     private fun makeGlass(material: Material): ItemStack {
@@ -408,13 +436,11 @@ class EnhanceGui(private val plugin: NyaruPlugin, private val player: Player) {
         @EventHandler
         fun onInventoryClose(event: InventoryCloseEvent) {
             val gui = activeInventories.remove(event.inventory) ?: return
-            // Return tool to player if still in the slot
             val tool = gui.inventory.getItem(EnhanceGui.TOOL_SLOT)
             if (tool != null && tool.type != Material.AIR) {
                 gui.inventory.setItem(EnhanceGui.TOOL_SLOT, null)
                 val overflow = gui.player.inventory.addItem(tool)
                 if (overflow.isNotEmpty()) {
-                    // Drop items at player location if inventory full
                     for (item in overflow.values) {
                         gui.player.world.dropItemNaturally(gui.player.location, item)
                     }
