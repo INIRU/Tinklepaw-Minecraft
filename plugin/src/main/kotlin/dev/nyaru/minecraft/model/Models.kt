@@ -128,6 +128,12 @@ object SkillRegistry {
         SkillDef("mace_master", "§b🔨 철퇴 달인", "miner", 3, listOf(5, 10, 18),
             listOf("§7철퇴 사용 시 특수 능력을 부여합니다.", "§7Lv1: 내구도 소모 X / Lv2: +도약 / Lv3: +낙뎀 X"),
             "MACE"),
+        SkillDef("ore_sight", "§b👁 광맥 감지", "miner", 3, listOf(4, 9, 16),
+            listOf("§7지하(Y<60)에서 야간 투시를 부여합니다.", "§7Lv1: 야간 투시 I", "§7Lv2: + 채굴 시 2% 추가 냥", "§7Lv3: + 채굴 시 5% 추가 냥"),
+            "SPYGLASS"),
+        SkillDef("magnet", "§b🧲 자석", "miner", 1, listOf(8),
+            listOf("§7채굴한 아이템이 자동으로 인벤토리에 들어옵니다."),
+            "IRON_INGOT"),
 
         // === Farmer ===
         SkillDef("wide_harvest", "§a🌾 넓은 수확", "farmer", 1, listOf(3),
@@ -145,6 +151,12 @@ object SkillRegistry {
         SkillDef("life_drain", "§a❤ 생명 흡수", "farmer", 3, listOf(4, 9, 16),
             listOf("§7괭이로 공격 시 체력을 흡수합니다.", "§7Lv1: 10% / Lv2: 20% / Lv3: 30% 피흡"),
             "GOLDEN_APPLE"),
+        SkillDef("green_thumb", "§a🌱 녹색 손길", "farmer", 3, listOf(6, 11, 18),
+            listOf("§7주변 작물의 성장을 촉진합니다.", "§7Lv1: 10% 확률 / Lv2: 20% / Lv3: 30%", "§7범위: 5블록, 3초마다 체크"),
+            "BONE_MEAL"),
+        SkillDef("scarecrow", "§a🎃 허수아비", "farmer", 3, listOf(8, 14, 20),
+            listOf("§7주변 적대 몹에게 슬로우를 부여합니다.", "§7Lv1: 5블록 / Lv2: 8블록 / Lv3: 12블록", "§7Slowness I, 5초마다 적용"),
+            "CARVED_PUMPKIN"),
 
         // === Warrior ===
         SkillDef("sword_mastery", "§c⚔ 검술 달인", "warrior", 3, listOf(1, 5, 10),
@@ -165,6 +177,12 @@ object SkillRegistry {
         SkillDef("lethal_strike", "§c☠ 치명적 일격", "warrior", 3, listOf(6, 11, 18),
             listOf("§7공격 시 적에게 위더 효과를 부여합니다.", "§7Lv1: 10%, 3초 / Lv2: 15%, 5초 / Lv3: 20%, 7초"),
             "WITHER_SKELETON_SKULL"),
+        SkillDef("shield_master", "§c🛡 방패 달인", "warrior", 3, listOf(4, 9, 16),
+            listOf("§7방패로 막을 때 반사 데미지.", "§7Lv1: 15% / Lv2: 30% / Lv3: 50% 반사"),
+            "SHIELD"),
+        SkillDef("dash", "§c💨 돌진", "warrior", 3, listOf(5, 10, 18),
+            listOf("§7웅크리기 중 맨손 좌클릭으로 전방 돌진.", "§7Lv1: 5블록 / Lv2: 8블록 / Lv3: 12블록", "§7쿨다운: 10초"),
+            "FEATHER"),
 
         // === Fisher ===
         SkillDef("lucky_catch", "§3🎣 행운의 낚시", "fisher", 3, listOf(1, 5, 10),
@@ -176,6 +194,18 @@ object SkillRegistry {
         SkillDef("treasure_hunter", "§3💎 보물 사냥꾼", "fisher", 3, listOf(7, 12, 20),
             listOf("§7낚시로 희귀 아이템 확률.", "§7Lv1: 5% / Lv2: 10% / Lv3: 15%"),
             "NAUTILUS_SHELL"),
+        SkillDef("water_breathing", "§3🫧 수중 호흡", "fisher", 3, listOf(2, 7, 14),
+            listOf("§7영구 수중 호흡을 부여합니다.", "§7Lv1: Water Breathing I / Lv2: II / Lv3: III"),
+            "TURTLE_HELMET"),
+        SkillDef("rain_dancer", "§3🌧 비의 축복", "fisher", 3, listOf(5, 10, 18),
+            listOf("§7비가 올 때 능력이 강화됩니다.", "§7Lv1: 속도 I / Lv2: +힘 I / Lv3: +재생 I"),
+            "WATER_BUCKET"),
+        SkillDef("trident_master", "§3🔱 삼지창 달인", "fisher", 3, listOf(6, 12, 20),
+            listOf("§7삼지창 공격 데미지 증가.", "§7Lv1: +15% / Lv2: +30% / Lv3: +50%"),
+            "TRIDENT"),
+        SkillDef("net_catch", "§3🪤 그물 낚시", "fisher", 3, listOf(4, 9, 16),
+            listOf("§7낚시 시 추가 아이템 드롭 확률.", "§7Lv1: 15% / Lv2: 30% / Lv3: 50%", "§7물고기 1마리 추가 드롭"),
+            "COBWEB"),
 
         // === Woodcutter ===
         SkillDef("timber", "§6🪓 벌목", "woodcutter", 1, listOf(5),
@@ -190,6 +220,15 @@ object SkillRegistry {
         SkillDef("forest_blessing", "§6🌿 숲의 축복", "woodcutter", 3, listOf(3, 8, 15),
             listOf("§7나무 근처에서 재생 효과를 받습니다.", "§7Lv1: Regeneration I / Lv2: II / Lv3: III"),
             "OAK_SAPLING"),
+        SkillDef("replanter", "§6🌳 자동 식목", "woodcutter", 1, listOf(7),
+            listOf("§7벌목 시 묘목을 자동으로 심습니다."),
+            "OAK_SAPLING"),
+        SkillDef("bark_armor", "§6🛡 나무 껍질 갑옷", "woodcutter", 3, listOf(5, 10, 18),
+            listOf("§7나무 근처에서 방어력이 증가합니다.", "§7Lv1: Resistance I / Lv2: II / Lv3: III", "§7범위: 5블록"),
+            "OAK_LOG"),
+        SkillDef("lumberjack_fury", "§6🪓 벌목꾼의 분노", "woodcutter", 3, listOf(6, 12, 20),
+            listOf("§7도끼로 공격 시 추가 데미지.", "§7Lv1: +15% / Lv2: +30% / Lv3: +50%"),
+            "NETHERITE_AXE"),
 
         // === Necromancer ===
         SkillDef("summon_undead", "§5☠ 언데드 소환", "necromancer", 3, listOf(1, 5, 10),
@@ -209,7 +248,13 @@ object SkillRegistry {
             "SOUL_LANTERN"),
         SkillDef("mind_control", "§5🧠 정신지배", "necromancer", 3, listOf(6, 11, 18),
             listOf("§7몹 처치 시 해당 몹을 미니언으로 부활시킵니다.", "§7Lv1: 30% / Lv2: 50% / Lv3: 100%", "§7부활 미니언: 체력 매우 낮음, 30초 지속"),
-            "SCULK_SHRIEKER")
+            "SCULK_SHRIEKER"),
+        SkillDef("soul_shield", "§5🛡 영혼 방패", "necromancer", 3, listOf(8, 14, 20),
+            listOf("§7피격 시 미니언이 대신 데미지를 흡수합니다.", "§7Lv1: 20% 확률 / Lv2: 35% / Lv3: 50%"),
+            "SHIELD"),
+        SkillDef("death_explosion", "§5💥 죽음의 폭발", "necromancer", 3, listOf(7, 13, 19),
+            listOf("§7미니언 사망 시 주변에 폭발 데미지.", "§7Lv1: 3데미지/3블록 / Lv2: 5/4 / Lv3: 8/5"),
+            "TNT")
     )
 
     fun forJob(job: String): List<SkillDef> = ALL.filter { it.job == job }

@@ -70,5 +70,20 @@ class FishingListener(private val plugin: NyaruPlugin, private val skillManager:
                 }
             }
         }
+
+        // Net Catch: extra fish drop
+        val netCatchLv = skills.getLevel("net_catch")
+        if (netCatchLv > 0) {
+            val netChance = when (netCatchLv) { 1 -> 0.15; 2 -> 0.30; else -> 0.50 }
+            if (Math.random() < netChance) {
+                val caught = event.caught
+                if (caught is Item) {
+                    val extraFish = caught.itemStack.clone()
+                    extraFish.amount = 1
+                    player.world.dropItemNaturally(caught.location, extraFish)
+                    player.sendActionBar(legacy.deserialize("§3§l🪤 그물 낚시! §7추가 아이템 획득"))
+                }
+            }
+        }
     }
 }

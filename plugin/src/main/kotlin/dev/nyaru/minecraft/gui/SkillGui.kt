@@ -29,8 +29,8 @@ class SkillGui(
     companion object {
         val activeInventories = ConcurrentHashMap<Inventory, SkillGui>()
 
-        // Skill slots for up to 5 skills per job
-        val SKILL_SLOTS = listOf(19, 21, 23, 25, 29, 31)
+        // Skill slots for up to 10 skills per job
+        val SKILL_SLOTS = listOf(10, 12, 14, 16, 19, 21, 23, 25, 28, 30)
 
         // Background glass per job
         fun bgGlassMaterial(job: String?): Material = when (job) {

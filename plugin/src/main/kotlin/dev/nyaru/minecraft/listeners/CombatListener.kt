@@ -13,9 +13,11 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.block.Action
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDamageEvent
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.event.player.PlayerInteractEvent
 import org.bukkit.potion.PotionEffect
 import org.bukkit.potion.PotionEffectType
 import java.util.UUID
@@ -44,6 +46,8 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
     private val warCryCooldown = ConcurrentHashMap<UUID, Long>()
     // Iron will cooldown: UUID -> timestamp (ms) of last proc
     private val ironWillCooldown = ConcurrentHashMap<UUID, Long>()
+    // Dash cooldown: UUID -> timestamp (ms) of last use
+    private val dashCooldown = ConcurrentHashMap<UUID, Long>()
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityDamageByEntity(event: EntityDamageByEntityEvent) {
@@ -98,6 +102,24 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
                     damager.location.add(0.0, 1.5, 0.0),
                     drainLv, 0.3, 0.3, 0.3, 0.0
                 )
+            }
+        }
+
+        // ── Fisher: Trident Master ───────────────────────────────────────────
+        if (job == Jobs.FISHER && heldItem.type == Material.TRIDENT) {
+            val tridentLv = skills.getLevel("trident_master")
+            if (tridentLv > 0) {
+                val bonus = when (tridentLv) { 1 -> 0.15; 2 -> 0.30; else -> 0.50 }
+                event.damage = event.damage * (1.0 + bonus)
+            }
+        }
+
+        // ── Woodcutter: Lumberjack Fury ──────────────────────────────────────
+        if (job == Jobs.WOODCUTTER && heldItem.type in AXE_MATERIALS) {
+            val furyLv = skills.getLevel("lumberjack_fury")
+            if (furyLv > 0) {
+                val bonus = when (furyLv) { 1 -> 0.15; 2 -> 0.30; else -> 0.50 }
+                event.damage = event.damage * (1.0 + bonus)
             }
         }
 
@@ -226,6 +248,62 @@ class CombatListener(private val plugin: NyaruPlugin, private val skillManager: 
             30, 0.5, 1.0, 0.5, 0.1
         )
         player.sendMessage(legacy.deserialize("§c§l강철 의지! §7치명적 피해를 버텨냈습니다! §8(쿨다운 3분)"))
+    }
+
+    // ── Warrior: Shield Master — reflect damage when blocking ─────────────
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onPlayerDamageByEntity(event: EntityDamageByEntityEvent) {
+        val player = event.entity as? Player ?: return
+        val uuid = player.uniqueId
+        val job = plugin.dataManager.getPlayer(uuid)?.job ?: return
+
+        if (job == Jobs.WARRIOR && player.isBlocking) {
+            val skills = skillManager.getSkills(uuid)
+            val shieldLv = skills.getLevel("shield_master")
+            if (shieldLv > 0) {
+                val reflectPct = when (shieldLv) { 1 -> 0.15; 2 -> 0.30; else -> 0.50 }
+                val reflectDmg = event.damage * reflectPct
+                val attacker = event.damager
+                if (attacker is LivingEntity) {
+                    plugin.server.scheduler.runTask(plugin, Runnable {
+                        attacker.damage(reflectDmg)
+                    })
+                    player.world.spawnParticle(Particle.CRIT, player.location.add(0.0, 1.0, 0.0), 10, 0.3, 0.3, 0.3, 0.1)
+                }
+            }
+        }
+    }
+
+    // ── Warrior: Dash — sneak + left-click air with empty hand ────────────
+    @EventHandler(priority = EventPriority.NORMAL)
+    fun onWarriorDash(event: PlayerInteractEvent) {
+        if (event.action != Action.LEFT_CLICK_AIR) return
+        val player = event.player
+        if (!player.isSneaking) return
+        if (player.inventory.itemInMainHand.type != Material.AIR) return
+
+        val uuid = player.uniqueId
+        val job = plugin.dataManager.getPlayer(uuid)?.job
+        if (job != Jobs.WARRIOR) return
+
+        val skills = skillManager.getSkills(uuid)
+        val dashLv = skills.getLevel("dash")
+        if (dashLv <= 0) return
+
+        val now = System.currentTimeMillis()
+        val lastDash = dashCooldown[uuid] ?: 0L
+        if (now - lastDash < 10_000L) {
+            val remaining = ((10_000L - (now - lastDash)) / 1000L)
+            player.sendActionBar(legacy.deserialize("§c돌진 쿨다운 중 (${remaining}초)"))
+            return
+        }
+
+        dashCooldown[uuid] = now
+        val power = when (dashLv) { 1 -> 1.5; 2 -> 2.0; else -> 2.8 }
+        player.velocity = player.location.direction.multiply(power)
+        player.playSound(player.location, Sound.ENTITY_BREEZE_JUMP, 1.0f, 1.2f)
+        player.world.spawnParticle(Particle.CLOUD, player.location, 10, 0.3, 0.1, 0.3, 0.05)
+        player.sendActionBar(legacy.deserialize("§c§l💨 돌진!"))
     }
 
     // ── Warrior XP: killing a hostile mob ──────────────────────────────

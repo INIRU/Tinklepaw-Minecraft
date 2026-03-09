@@ -38,7 +38,7 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
             "건축" to Material.BRICKS
         )
 
-        val CATEGORY_SLOTS = listOf(20, 21, 22, 23, 24)
+        val CATEGORY_SLOTS = listOf(10, 12, 14, 16, 19, 21, 23, 25)
 
         val ITEM_SLOTS = listOf(
             10, 11, 12, 13, 14, 15, 16,
@@ -95,14 +95,6 @@ class ShopGui(private val plugin: NyaruPlugin, private val player: Player) {
         for (i in 45..53) inventory.setItem(i, headerGlass)
 
         val categories = plugin.shopManager.getCategories()
-        val startSlot = when (categories.size) {
-            1 -> 22
-            2 -> 21
-            3 -> 20
-            4 -> 20
-            else -> 20
-        }
-
         for ((idx, category) in categories.withIndex()) {
             if (idx >= CATEGORY_SLOTS.size) break
             val slot = CATEGORY_SLOTS[idx]

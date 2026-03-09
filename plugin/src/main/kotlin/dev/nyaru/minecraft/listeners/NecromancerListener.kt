@@ -146,9 +146,9 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         val ownerUuidStr = damager.persistentDataContainer.get(ownerKey, PersistentDataType.STRING) ?: return
         val ownerUuid = runCatching { UUID.fromString(ownerUuidStr) }.getOrNull() ?: return
 
-        // Prevent friendly fire: cancel if minion attacks its own owner
+        // Prevent minion from attacking ANY player
         val victim = event.entity
-        if (victim is Player && victim.uniqueId == ownerUuid) {
+        if (victim is Player) {
             event.isCancelled = true
             return
         }
@@ -215,6 +215,33 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
         damager.sendActionBar(legacy.deserialize("§5§l🌑 암흑 오라 발동! §7주변 적에게 슬로우+어둠 적용"))
     }
 
+    // ── Soul Shield: minion absorbs damage for owner ──────────────────────
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    fun onSoulShield(event: EntityDamageByEntityEvent) {
+        val victim = event.entity as? Player ?: return
+        val uuid = victim.uniqueId
+        val job = plugin.dataManager.getPlayer(uuid)?.job ?: return
+        if (job != Jobs.NECROMANCER) return
+
+        val skills = plugin.dataManager.getSkills(uuid)
+        val soulShieldLv = skills.getLevel("soul_shield")
+        if (soulShieldLv <= 0) return
+
+        val chance = when (soulShieldLv) { 1 -> 0.20; 2 -> 0.35; else -> 0.50 }
+        if (Math.random() >= chance) return
+
+        val minions = plugin.minionManager.getMinions(uuid)
+        val aliveMinion = minions.firstOrNull { !it.isDead } ?: return
+
+        // Transfer damage to minion
+        val dmg = event.damage
+        event.damage = 0.0
+        aliveMinion.damage(dmg)
+
+        victim.world.spawnParticle(Particle.SOUL, victim.location.add(0.0, 1.0, 0.0), 5, 0.3, 0.3, 0.3, 0.05)
+        victim.sendActionBar(legacy.deserialize("§5§l🛡 영혼 방패! §7미니언이 대신 피해를 흡수했습니다."))
+    }
+
     // ── Entity death: handle minion deaths, minion kills, and mind control ──
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     fun onEntityDeath(event: EntityDeathEvent) {
@@ -222,6 +249,26 @@ class NecromancerListener(private val plugin: NyaruPlugin) : Listener {
 
         // Dead entity is a minion: clear drops and XP
         if (dead is Mob && plugin.minionManager.isAnyMinion(dead)) {
+            // Death Explosion: AoE damage on minion death
+            val minionOwnerStr = dead.persistentDataContainer.get(ownerKey, PersistentDataType.STRING)
+            if (minionOwnerStr != null) {
+                val mOwnerUuid = runCatching { UUID.fromString(minionOwnerStr) }.getOrNull()
+                if (mOwnerUuid != null) {
+                    val mSkills = plugin.dataManager.getSkills(mOwnerUuid)
+                    val explosionLv = mSkills.getLevel("death_explosion")
+                    if (explosionLv > 0) {
+                        val dmg = when (explosionLv) { 1 -> 3.0; 2 -> 5.0; else -> 8.0 }
+                        val range = when (explosionLv) { 1 -> 3.0; 2 -> 4.0; else -> 5.0 }
+                        val loc = dead.location
+                        loc.world?.getNearbyEntities(loc, range, range, range)
+                            ?.filterIsInstance<LivingEntity>()
+                            ?.filter { it !is Player && !plugin.minionManager.isAnyMinion(it) }
+                            ?.forEach { it.damage(dmg) }
+                        loc.world?.spawnParticle(Particle.EXPLOSION, loc, 1, 0.0, 0.0, 0.0, 0.0)
+                        loc.world?.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 0.6f, 1.2f)
+                    }
+                }
+            }
             event.drops.clear()
             event.droppedExp = 0
             return

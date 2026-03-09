@@ -208,15 +208,65 @@ class BlockBreakListener(private val plugin: NyaruPlugin, private val skillManag
             if (timberLevel >= 1 && !plugin.protectionManager.isProtected(event.block.location)) {
                 timberActive.add(uuid)
                 val tool = player.inventory.itemInMainHand
+                val brokenBlock = event.block
                 plugin.server.scheduler.runTask(plugin, Runnable {
                     try {
-                        breakConnectedLogs(event.block, blockType, leafBlowerLevel >= 1, tool)
+                        breakConnectedLogs(brokenBlock, blockType, leafBlowerLevel >= 1, tool)
                     } finally {
                         timberActive.remove(uuid)
                     }
                 })
+
+                // Replanter: auto-plant sapling
+                if (skills.getLevel("replanter") >= 1) {
+                    val sapling = logToSapling(blockType)
+                    if (sapling != null) {
+                        plugin.server.scheduler.runTaskLater(plugin, Runnable {
+                            if (brokenBlock.type == Material.AIR) {
+                                brokenBlock.type = sapling
+                            }
+                        }, 5L)
+                    }
+                }
             }
         }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    fun onMinerItemDrop(event: BlockDropItemEvent) {
+        val blockType = event.blockState.type
+        // Skip crops — handled by onCropDrop
+        if (blockType in CROP_MATERIALS) return
+
+        val player = event.player
+        val uuid = player.uniqueId
+        val job = plugin.dataManager.getPlayer(uuid)?.job
+        if (job != "miner") return
+        val skills = skillManager.getSkills(uuid)
+        if (skills.getLevel("magnet") < 1) return
+
+        for (item in event.items.toList()) {
+            val stack = item.itemStack
+            val remaining = player.inventory.addItem(stack)
+            if (remaining.isEmpty()) {
+                item.remove()
+            } else {
+                item.itemStack = remaining.values.first()
+            }
+        }
+        player.playSound(player.location, Sound.ENTITY_ITEM_PICKUP, 0.3f, 1.5f)
+    }
+
+    private fun logToSapling(logType: Material): Material? = when (logType) {
+        Material.OAK_LOG, Material.OAK_WOOD, Material.STRIPPED_OAK_LOG, Material.STRIPPED_OAK_WOOD -> Material.OAK_SAPLING
+        Material.BIRCH_LOG, Material.BIRCH_WOOD, Material.STRIPPED_BIRCH_LOG, Material.STRIPPED_BIRCH_WOOD -> Material.BIRCH_SAPLING
+        Material.SPRUCE_LOG, Material.SPRUCE_WOOD, Material.STRIPPED_SPRUCE_LOG, Material.STRIPPED_SPRUCE_WOOD -> Material.SPRUCE_SAPLING
+        Material.JUNGLE_LOG, Material.JUNGLE_WOOD, Material.STRIPPED_JUNGLE_LOG, Material.STRIPPED_JUNGLE_WOOD -> Material.JUNGLE_SAPLING
+        Material.ACACIA_LOG, Material.ACACIA_WOOD, Material.STRIPPED_ACACIA_LOG, Material.STRIPPED_ACACIA_WOOD -> Material.ACACIA_SAPLING
+        Material.DARK_OAK_LOG, Material.DARK_OAK_WOOD, Material.STRIPPED_DARK_OAK_LOG, Material.STRIPPED_DARK_OAK_WOOD -> Material.DARK_OAK_SAPLING
+        Material.CHERRY_LOG, Material.CHERRY_WOOD, Material.STRIPPED_CHERRY_LOG, Material.STRIPPED_CHERRY_WOOD -> Material.CHERRY_SAPLING
+        Material.MANGROVE_LOG, Material.MANGROVE_WOOD, Material.STRIPPED_MANGROVE_LOG, Material.STRIPPED_MANGROVE_WOOD -> Material.MANGROVE_PROPAGULE
+        else -> null
     }
 
     private fun dropCustomCropItems(loc: org.bukkit.Location, cropType: Material, harvestFortune: Int = 0) {

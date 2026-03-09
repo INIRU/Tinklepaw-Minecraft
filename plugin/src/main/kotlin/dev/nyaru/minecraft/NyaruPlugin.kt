@@ -119,6 +119,10 @@ class NyaruPlugin : JavaPlugin() {
 
         skillManager = SkillManager(this)
         skillManager.startForestBlessingCheck()
+        skillManager.startOreSightCheck()
+        skillManager.startRainDancerCheck()
+        skillManager.startGreenThumbCheck()
+        skillManager.startScarecrowCheck()
         minionManager = MinionManager(this)
         minionManager.startMinionTask()
         server.pluginManager.registerEvents(NecromancerListener(this), this)

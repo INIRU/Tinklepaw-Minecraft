@@ -44,6 +44,7 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
         player.removePotionEffect(PotionEffectType.RESISTANCE)
         player.removePotionEffect(PotionEffectType.DOLPHINS_GRACE)
         player.removePotionEffect(PotionEffectType.LUCK)
+        player.removePotionEffect(PotionEffectType.WATER_BREATHING)
 
         when (job) {
             Jobs.MINER -> {
@@ -82,6 +83,15 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                         PotionEffectType.LUCK,
                         Integer.MAX_VALUE,
                         luckLevel - 1,
+                        false, false, false
+                    ))
+                }
+                val waterBreathingLevel = skills.getLevel("water_breathing")
+                if (waterBreathingLevel > 0) {
+                    player.addPotionEffect(PotionEffect(
+                        PotionEffectType.WATER_BREATHING,
+                        Integer.MAX_VALUE,
+                        waterBreathingLevel - 1,
                         false, false, false
                     ))
                 }
@@ -140,8 +150,109 @@ class SkillManager(private val plugin: NyaruPlugin) : Listener {
                         false, false, true
                     ))
                 }
+
+                // Bark Armor: Resistance near trees
+                val barkArmorLevel = skills.getLevel("bark_armor")
+                if (barkArmorLevel > 0 && nearTree) {
+                    player.addPotionEffect(PotionEffect(
+                        PotionEffectType.RESISTANCE,
+                        100,
+                        barkArmorLevel - 1,
+                        false, false, true
+                    ))
+                }
             }
         }, 60L, 60L)
+    }
+
+    fun startOreSightCheck() {
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            for (player in Bukkit.getOnlinePlayers()) {
+                val uuid = player.uniqueId
+                val job = plugin.dataManager.getPlayer(uuid)?.job
+                if (job != Jobs.MINER) continue
+                val skills = skillCache[uuid] ?: continue
+                val oreSightLevel = skills.getLevel("ore_sight")
+                if (oreSightLevel <= 0) continue
+                if (player.location.y < 60) {
+                    player.addPotionEffect(PotionEffect(
+                        PotionEffectType.NIGHT_VISION,
+                        300, // 15 seconds (refreshed every 3s)
+                        0,
+                        false, false, true
+                    ))
+                }
+            }
+        }, 60L, 60L)
+    }
+
+    fun startRainDancerCheck() {
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            for (player in Bukkit.getOnlinePlayers()) {
+                val uuid = player.uniqueId
+                val job = plugin.dataManager.getPlayer(uuid)?.job
+                if (job != Jobs.FISHER) continue
+                val skills = skillCache[uuid] ?: continue
+                val rainLv = skills.getLevel("rain_dancer")
+                if (rainLv <= 0) continue
+                val world = player.world
+                if (!world.hasStorm()) continue
+                // Lv1: speed, Lv2: +strength, Lv3: +regeneration
+                player.addPotionEffect(PotionEffect(PotionEffectType.SPEED, 300, 0, false, false, true))
+                if (rainLv >= 2) {
+                    player.addPotionEffect(PotionEffect(PotionEffectType.STRENGTH, 300, 0, false, false, true))
+                }
+                if (rainLv >= 3) {
+                    player.addPotionEffect(PotionEffect(PotionEffectType.REGENERATION, 300, 0, false, false, true))
+                }
+            }
+        }, 60L, 60L)
+    }
+
+    fun startGreenThumbCheck() {
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            for (player in Bukkit.getOnlinePlayers()) {
+                val uuid = player.uniqueId
+                val job = plugin.dataManager.getPlayer(uuid)?.job
+                if (job != Jobs.FARMER) continue
+                val skills = skillCache[uuid] ?: continue
+                val greenThumbLv = skills.getLevel("green_thumb")
+                if (greenThumbLv <= 0) continue
+                val chance = greenThumbLv * 0.10
+                if (Math.random() >= chance) continue
+                val loc = player.location
+                val world = loc.world ?: continue
+                for (dx in -5..5) {
+                    for (dz in -5..5) {
+                        val block = world.getBlockAt(loc.blockX + dx, loc.blockY, loc.blockZ + dz)
+                        val data = block.blockData
+                        if (data is org.bukkit.block.data.Ageable && data.age < data.maximumAge) {
+                            data.age = (data.age + 1).coerceAtMost(data.maximumAge)
+                            block.blockData = data
+                        }
+                    }
+                }
+            }
+        }, 60L, 60L)
+    }
+
+    fun startScarecrowCheck() {
+        Bukkit.getScheduler().runTaskTimer(plugin, Runnable {
+            for (player in Bukkit.getOnlinePlayers()) {
+                val uuid = player.uniqueId
+                val job = plugin.dataManager.getPlayer(uuid)?.job
+                if (job != Jobs.FARMER) continue
+                val skills = skillCache[uuid] ?: continue
+                val scarecrowLv = skills.getLevel("scarecrow")
+                if (scarecrowLv <= 0) continue
+                val range = when (scarecrowLv) { 1 -> 5.0; 2 -> 8.0; else -> 12.0 }
+                val nearbyMobs = player.world.getNearbyEntities(player.location, range, range, range)
+                    .filterIsInstance<org.bukkit.entity.Monster>()
+                for (mob in nearbyMobs) {
+                    mob.addPotionEffect(PotionEffect(PotionEffectType.SLOWNESS, 120, 0, false, false, false))
+                }
+            }
+        }, 100L, 100L)
     }
 
     @EventHandler
